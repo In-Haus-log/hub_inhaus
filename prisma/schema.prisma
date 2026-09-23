@@ -468,3 +468,77 @@ model TreinamentoPresenca {
   @@unique([treinamentoId, cpfHash])
   @@map("treinamento_presenca")
 }
+
+// ---- Módulo Projeções (etapa 1) — tabelas criadas por prisma/sql/014_projecoes.sql ----
+// O hub LÊ estas tabelas via SQL (src/lib/projecoes); quem grava é o carregador/RPA.
+// cr_cod, pec_cod, pec_situacao e conta_mae são colunas GERADAS no banco: nunca gravar.
+
+model FtCargaRealOrcado {
+  id             BigInt    @id @default(autoincrement())
+  iniciadoEm     DateTime  @default(now()) @map("iniciado_em") @db.Timestamptz(6)
+  concluidoEm    DateTime? @map("concluido_em") @db.Timestamptz(6)
+  origem         String
+  competencias   DateTime[] @db.Date
+  linhas         Int       @default(0)
+  totalRealizado Decimal   @default(0) @map("total_realizado") @db.Decimal(18, 2)
+  totalOrcado    Decimal   @default(0) @map("total_orcado") @db.Decimal(18, 2)
+  status         String    @default("EM_ANDAMENTO")
+  mensagem       String?
+  lancamentos    FtRealOrcado[]
+
+  @@map("ft_carga_real_orcado")
+}
+
+model DmConta {
+  contaMae String  @id @map("conta_mae")
+  nome     String
+  grupo2   String?
+  ordem    Int
+  ativo    Boolean @default(true)
+
+  @@map("dm_conta")
+}
+
+model FtRealOrcado {
+  id             BigInt   @id @default(autoincrement())
+  competencia    DateTime @db.Date
+  valorRealizado Decimal  @default(0) @map("valor_realizado") @db.Decimal(18, 2)
+  valorOrcado    Decimal  @default(0) @map("valor_orcado") @db.Decimal(18, 2)
+  origem         String?
+  conta          String
+  descConta      String?  @map("desc_conta")
+  grupo1         String?
+  grupo2         String?
+  cr             String?
+  centroCusto    String?  @map("centro_custo")
+  pec            String?
+  cliente        String?
+  segCliente     String?  @map("seg_cliente")
+  tipoCliente    String?  @map("tipo_cliente")
+  regional       String?
+  negocio        String?
+  solucao        String?
+  grupoInd       String?  @map("grupo_ind")
+  gerente        String?
+  supervisor     String?
+  gerenteGeral   String?  @map("gerente_geral")
+  dirReg         String?  @map("dir_reg")
+  dirExe         String?  @map("dir_exe")
+  empresa        String?
+  empCtb         String?  @map("emp_ctb")
+  nomeEmpCtb     String?  @map("nome_emp_ctb")
+  regEmpCtb      String?  @map("reg_emp_ctb")
+  regCr          String?  @map("reg_cr")
+  historico      String?
+  lote           String?
+  conqPerda      String?  @map("conq_perda")
+  cargaId        BigInt?  @map("carga_id")
+  carga          FtCargaRealOrcado? @relation(fields: [cargaId], references: [id])
+  crCod          String?  @map("cr_cod")
+  pecCod         String?  @map("pec_cod")
+  pecSituacao    String?  @map("pec_situacao")
+  contaMae       String?  @map("conta_mae")
+
+  @@index([competencia])
+  @@map("ft_real_orcado")
+}
