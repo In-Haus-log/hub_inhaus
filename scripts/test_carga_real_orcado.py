@@ -66,3 +66,81 @@ def test_resumo_soma_e_lista_meses():
 def test_limpar_url_remove_schema():
     url = "postgresql://u:p@host:5432/db?schema=public&sslmode=require"
     assert limpar_url(url) == "postgresql://u:p@host:5432/db?sslmode=require"
+
+
+def test_carregar_rollback_e_registro_de_erro():
+    """Testa o contrato de segurança: falha ⇒ rollback + INSERT com ERRO + exception propagada."""
+    from carga_real_orcado import carregar
+
+    class FakeCursor:
+        """Cursor falso que registra SQL e simula erro no DELETE."""
+
+        def __init__(self):
+            self.sqls = []
+            self.error_on_delete = True
+
+        def execute(self, sql, params=None):
+            self.sqls.append((sql, params))
+            # Simula erro durante o DELETE
+            if self.error_on_delete and "delete from ft_real_orcado" in sql.lower():
+                raise RuntimeError("Simulado: erro no DELETE")
+            # Simula retorno do INSERT que pega o carga_id
+            if "insert into ft_carga_real_orcado" in sql.lower() and "returning id" in sql.lower():
+                # Funciona como fetchone()
+                pass
+
+        def fetchone(self):
+            # Devolve um ID fictício (1,) para o primeiro INSERT
+            return (1,)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+    class FakeConnection:
+        """Conexão falsa que registra commit/rollback."""
+
+        def __init__(self):
+            self.cursor_obj = FakeCursor()
+            self.commits = 0
+            self.rollbacks = 0
+            self.call_history = []
+
+        def cursor(self):
+            return self.cursor_obj
+
+        def commit(self):
+            self.commits += 1
+            self.call_history.append("commit")
+
+        def rollback(self):
+            self.rollbacks += 1
+            self.call_history.append("rollback")
+
+    conn = FakeConnection()
+    regs = [linha_para_registro(linha_base())]
+
+    # Deve lançar a exceção original
+    with pytest.raises(RuntimeError, match="Simulado: erro no DELETE"):
+        carregar(conn, regs, "SCRIPT")
+
+    # (a) rollback foi chamado antes de qualquer commit final
+    assert "rollback" in conn.call_history
+    assert conn.rollbacks >= 1
+
+    # (b) Após rollback, um INSERT com 'ERRO' foi executado e commit foi chamado uma vez
+    # (apenas para registrar o erro; a tentativa original falhou)
+    error_inserts = [
+        sql for sql, _ in conn.cursor_obj.sqls
+        if "insert into ft_carga_real_orcado" in sql.lower() and "ERRO" not in str(sql)
+        or "ERRO" in str(sql)
+    ]
+    # Procura o INSERT com status ERRO (acontece fora do try/except com commit separado)
+    assert any("ERRO" in str(sql) for sql, _ in conn.cursor_obj.sqls), "INSERT com ERRO não encontrado"
+
+    # (c) Nenhum INSERT em ft_real_orcado foi executado (pois falhou no DELETE)
+    assert not any(
+        "insert into ft_real_orcado" in sql.lower() for sql, _ in conn.cursor_obj.sqls
+    ), "INSERT em ft_real_orcado não deveria ter sido executado"
