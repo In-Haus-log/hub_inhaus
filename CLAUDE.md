@@ -42,9 +42,6 @@ cores/tokens roxos pelos de navy/teal.
 
 ## Stack
 
-Next.js 14 (App Router) · TypeScript · Tailwind · shadcn/ui · Prisma + Postgres ·
-Recharts · `ogl` (WebGL do hero).
-
 Server Components por padrão. `"use client"` restrito a: hero canvas, shell (drawer
 mobile / sessão), `TiltCard`, gráficos e formulário de login.
 
@@ -149,172 +146,19 @@ Recorte de QUAIS dados cada usuário vê, por CR/cliente. Tudo é autorização 
 - Concessão na tela **Usuários** (classificação + clientes/CRs); endpoint
   `GET /api/admin/clientes-crs` alimenta os seletores.
 
-### Indicador REAL: Controle de Quadro (`/dashboards/rh/controle-quadro`)
-Único indicador ligado a dados reais. Lê a view `vw_sra_geral` (banco `db_inhaus`,
-`DATABASE_URL_INHAUS`). Módulo de dados: `src/lib/quadro.ts` (regras de negócio no topo).
-- **Gerente regional fixo** = Lucas Rodrigues da Silva (não é filtro).
-- **Filtros de múltipla escolha**: Gerente, Centro de Resultado (CR) e Mês
-  (`MultiCombobox` pesquisável), e Cargos (`SeletorCargos`, exclusão). Estado na URL
-  (params repetidos `ger`, `cr`, `mes`, `excluir`). Selecionar TODAS as opções de um
-  dropdown = nenhum filtro (todos). Botão "Limpar filtros". Painel de filtros **suspenso**
-  (`FiltrosQuadro`), acionado por um botão; badge conta filtros isolados ativos.
-- **Cards** (lado a lado): total de colaboradores (matrícula distinta), desligamentos no
-  mês (por data de demissão), e situações (em atividade / férias / afastados).
-- **Total por CR** e **Total por cargo**: barras horizontais (`BarrasQuadro`), no último
-  dia disponível, top 15 com scroll. O nome do CR aparece inteiro, em uma linha.
-- **Quadro ativo por dia**: `LinhaQuadro` — total em cada data de referência (fotografia
-  real; não inventa dias sem coleta). **Quadro médio por mês**: média das fotografias do mês.
-- Botão **info** (`InfoIndicador`) com todas as regras em linguagem de negócio.
+### Módulos — detalhes em skills do projeto (`.claude/skills/`)
+Cada módulo tem uma skill com a arquitetura e as regras completas; ela carrega quando você
+trabalha no módulo. **Leia a skill antes de mexer no módulo.**
+- **Controle de Quadro** (`/dashboards/rh/controle-quadro`) → `indicador-controle-quadro`.
+- **EPI** (`src/lib/epi`, `/p/[token]`) → `modulo-epi`.
+- **Clientes / Desvios (Atlas) + portal do cliente** → `modulo-desvios`.
+- **Treinamentos + Controle de Capacitação** (`/t/[token]`) → `modulo-treinamentos`.
+- **Portal Enjoei** (CR 68732) → `portal-enjoei`.
 
-### Módulo de EPI — Controle de utilização de EPI (Fases 0–2 prontas)
-Primeiro módulo **transacional** do hub (escreve dados de negócio). Camada em `src/lib/epi/`
-(regras no topo de `index.ts`); models `epi_*` no `schema.prisma`, criados por `prisma/sql/001_epi.sql`.
-- **Agregado central = SessaoTurno** (cliente + CR + turno + data): N respostas + 1 validação.
-  1 sessão por turno/dia (`@@unique`), 1 resposta por pessoa/sessão, 1 validação por sessão.
-- **Identidade = HMAC do CPF** (`cpf.ts`, `EPI_CPF_SECRET`). NUNCA CPF em claro nem na URL.
-  Matrícula é só informativa (colide entre CRs). A `matricula` da SRA **não identifica pessoa**.
-- **Quadro de liderados é DERIVADO AO VIVO** do quadro ativo do CR (`colaboradores.ts`, lê
-  `ft_colaboradores_sra` com `dt_demissao IS NULL` — não a `vw_sra_geral`). Admissão aparece,
-  desligamento some. `atribuicao.ts` só guarda **em qual turno** a pessoa está; ativo sem turno
-  vigente = "não alocado" (sinalizado). Vínculos usam vigência (`fimEm`), nunca delete.
-- **Checklist é BIBLIOTECA GLOBAL versionada** (`config.ts`): `ChecklistTemplate` não pertence a
-  cliente/CR — é criado uma vez (seção **Checklists**, `/dashboards/epi/checklists`) e **vinculado**
-  a qualquer CR (`ClienteCr.checklistTemplateId`), reaproveitável entre clientes. Na tela dá para
-  **criar, renomear (PATCH), editar itens** (pré-carrega a versão atual e publica uma nova) e
-  **excluir** (soft-delete `ativo=false`; **bloqueado com 409 se vinculado** a algum setor). Editar
-  publicado cria versão nova; a antiga fica no histórico. `versaoPublicadaDoCr(cr)` resolve pelo
-  vínculo do CR. `POST /api/epi/crs/checklist` vincula; `PATCH/DELETE /api/epi/templates/[id]`.
-- **Papéis** (`papeis.ts`/`escopo.ts`): ADMIN (isAdmin global) configura tudo; PARAMETRIZADOR
-  aloca. **Líder é por SETOR (CR): `LiderCr`** (cliente+cr+usuário, vigência) — 1 líder responde por
-  vários CRs e um CR pode ter vários líderes; ser líder de um CR habilita validar **todos os turnos**
-  dele. `getTurnoIdsDoLider` deriva de `LiderCr` (+ `ResponsavelTurno` legado). `podeVerValidacoes(escopo)`
-  = admin ou tem turno como líder. Gestão em **`/dashboards/epi/lideres`** (escolhe usuário + multi-CR).
-  `escopoDoUsuario()` centraliza QUEM vê os dados de QUEM. Guardas em `guardas.ts` **honram o acesso
-  livre** de dev (senão os route handlers dariam 401 em dev).
-- **UI para usuário comum (não-dev):** a configuração é um **ASSISTENTE guiado**
-  (`/dashboards/epi/configurar`, `AssistenteConfiguracao.tsx`): cliente → setor (CR) → turno +
-  líder → checklist → pessoas, um passo por vez, com instrução em cada etapa. **Em lote:** o passo
-  de turnos cria VÁRIOS de uma vez; o de checklist VINCULA um da biblioteca (ou cria novo); o de
-  pessoas aloca cobrindo os vários turnos (chips de turno por pessoa + "todos para"). O líder é
-  **escolhido de uma lista de usuários do hub** (`listarUsuariosHub`), nunca UUID digitado. A
-  sidebar do EPI tem **Configurar**, **Checklists**, **Líderes** e **Validações**. As telas granulares antigas
-  (clientes/turnos/checklists/alocacoes/membros) continuam existindo, mas fora da navegação.
-- **QR Code** (`QrLinkPublico.tsx`, lib `qrcode.react`): ao concluir um setor no assistente (e no
-  card de turno) mostra o **QR do link público** `/p/<token>` com copiar / abrir / **imprimir**
-  (janela de impressão dedicada). **Dropdowns** (`Combobox`/`MultiCombobox`) renderizam o menu num
-  **portal** (`position: fixed`, z-index alto) — não são mais cortados por `overflow` nem ficam
-  atrás de cards `.glass` (que criam stacking context via blur).
-- Escrita por route handlers `/api/epi/*` (validação **zod** em `schemas.ts`, guardas + padrão de
-  erro `{ error }`); `GET /api/epi/colaboradores?cr=` serve o quadro ativo ao assistente.
-  Componentes client em `src/components/epi/`.
-- **Execução (Fase 2, pronta):** cada turno tem um **token público estável** (`token_publico`),
-  usado no QR/link. `sessao.ts` resolve/cria a sessão do dia de forma **idempotente** na 1ª leitura
-  (data de negócio America/Sao_Paulo em `datas.ts`; congela a versão publicada do checklist).
-  - **Rota pública** `/p/[token]` (fora de `/dashboards`, liberada no `middleware.ts`): liderado
-    escolhe o nome do turno + digita CPF (conferido por HMAC) e marca cada item conforme/não conforme.
-    POST em `/p/[token]/responder`. A resposta congela snapshot (nome/cargo/CR).
-  - **Validação do líder**: `/dashboards/epi/validacoes` (lista do dia no escopo) + `/[id]` (revisão
-    visual). A tela lista **TODOS os liderados alocados** (quadro ativo ∩ atribuição) unidos a quem
-    preencheu, com status (Conforme / Não conforme / Não preencheu) e um toggle **Presente/Ausente**.
-    O líder marca a **presença** de cada um — resolve escalas de revezamento (ex.: **12x36**): só se
-    cobra preenchimento de quem estava presente. `validarSessao` grava `PresencaSessao` (por pessoa) +
-    `ValidacaoSessao` com `hashConteudo` (base da assinatura futura) e fecha a sessão. Exige ao menos
-    **um presente que preencheu**. **Assinatura NÃO capturada por ora.**
-  - **Turno tem `diasSemana`** (dias em que espera preenchimento). O assistente tem atalhos "Seg a Sex",
-    "Seg a Sáb" e "Todos os dias" — 12x36 usa **Todos os dias** (a presença é resolvida na validação).
-- **Falta (Fase 3+):** **indicador** de aderência (validadas ÷ esperadas) e não conformidade por
-  tipo de EPI (entra em `domains.ts` no domínio Segurança, com botão info); captura de **assinatura**.
-
-### Módulo Clientes / Desvios (Atlas Copco) + modelo de visibilidade
-Primeiro módulo de **cliente** do hub. Handoff completo:
-`docs/superpowers/2026-08-25-modulo-clientes-desvios-handoff.md` (LER ao continuar esta frente).
-- **Governança em dois eixos:** Eixo 1 = QUAIS telas (`AuthUser.visibleScreens[]` + `isAdmin`);
-  Eixo 2 = QUAIS dados. Para os **desvios**, o escopo é **derivado das telas concedidas**
-  (`src/lib/desvios/escopo-usuario.ts`) — quem tem as telas de um cliente vê os dados dele.
-- **Cliente (classificacao=CLIENTE):** **portal enxuto** — sidebar mostra só as telas dele
-  (com a logo do cliente), sem In-Haus/Clientes/domínios/Admin; `/dashboards` redireciona à 1ª
-  tela. **Trava central** no `layout.tsx` (via header `x-pathname` do `middleware.ts`) bloqueia
-  o CLIENTE de abrir qualquer rota fora das telas dele, mesmo por URL. Só dá para testar em
-  **produção** (dev = admin).
-- **Sidebar interna:** raiz = Visão Geral · **In-Haus** (áreas internas + EPI) · **Clientes**
-  (drill-down cliente→telas) · Administração. Domínios em `domains.ts`: 5 internos + `epi`
-  (só no seletor/palette; sidebar do EPI é por papel) + `clientes` (com `clientes[]`).
-- **Desvios:** tabela `desvio` (SQL `009`), status `EM_TRATATIVA|PENDENTE|CONCLUIDA`, isolamento
-  por contratante com 2 travas (`escopo-contratante.ts`). Telas em
-  `/dashboards/clientes/atlas/desvios/{painel,,novo}`. Listas configuráveis por cliente
-  (`desvio_opcao`, SQL `010`, `opcoes-cliente.ts`, diálogo admin `ConfiguradorListas`).
-- **Tela de Usuários:** seletor de telas **agrupado** (`SeletorTelas`: áreas internas + por
-  cliente) + toggle **"É cliente?"**. Removidos os seletores de Clientes/CR/Contratante (o
-  back-end de escopo por CR/contratante continua, sem UI).
-- Pendências no handoff (§10): isolamento por URL p/ internos não-admin; readicionar seletor de
-  CR quando preciso; decidir se EPI migra p/ telas visíveis; validar 2º cliente.
-
-### Módulo de Treinamentos + Controle de Capacitação (RH)
-Registro de presença em treinamentos por **QR + CPF** e um **painel gerencial** de capacitação.
-Duas telas, ambas no domínio **RH**, agrupadas na sidebar sob a subdivisão **"Capacitação"**
-(feature nova `divisao` em `domains.ts`/`DashboardSidebar`): *Controle de Capacitação* acima de
-*Treinamentos*.
-- **Telas / chaves de permissão** (`src/lib/domains.ts`): `treinamentos-registro` →
-  `/dashboards/rh/treinamentos` (ferramenta); `treinamentos-visao-geral` →
-  `/dashboards/treinamentos` (painel gerencial). A tela do painel foi **movida** do antigo domínio
-  "treinamentos" para dentro de RH; aquele domínio agora só tem telas `emBreve` (não aparece na
-  sidebar). Guardas: páginas usam `assertTelaVisivel`; API usa `guardaInterno()`
-  (`src/lib/treinamentos/guarda.ts`, honra o acesso livre de dev).
-- **Registro** (`src/lib/treinamentos/index.ts`; tabelas `treinamento`, `treinamento_responsavel`,
-  `treinamento_presenca`; SQL `prisma/sql/011_treinamentos.sql` + `012_treinamento_cpf.sql`):
-  cria treinamento (nome, data, duração, responsável de lista própria), gera **token público
-  estável** para o QR, lista presença, **editar** (dialog) e **encerrar** (dialog de confirmação —
-  depois não gera mais QR nem aceita presença). Responsáveis num cadastro próprio
-  (`treinamento_responsavel`), escolhidos por `Combobox`.
-- **Rota pública** `/t/[token]` (liberada no `middleware.ts`; POST em `/api/t/[token]/confirmar`):
-  o participante digita **só os 11 dígitos** do CPF e confirma. Identidade = **HMAC do CPF**
-  (`EPI_CPF_SECRET`); idempotente por `(treinamento, cpf_hash)`. Resolve o colaborador no quadro
-  ativo da SRA (`colaborador.ts`) — congela nome/CR/cargo/matrícula no snapshot.
-- **CPF em claro (`cpf_texto`) é gravado APENAS de quem NÃO foi localizado na SRA** (para o RH
-  identificar quem é); localizados ficam só com o hash. A coluna CPF da tabela de presença só
-  mostra o CPF dos não-localizados. A coluna **Unidade (CR)** é exibida em CAIXA ALTA.
-- **Controle de Capacitação** (`src/lib/capacitacao.ts`): visão gerencial. Filtros
-  **mês / cliente / CR / responsável** (cliente e CR derivados de `dm_cr` pelo `crCod` da presença).
-  Cards: **colaboradores treinados** (distintos por `cpf_hash`) e **horas treinadas** (soma das
-  presenças × duração), média h/colaborador e treinamentos realizados. **Linha do tempo** por mês
-  **ignora o filtro de mês** (mostra sempre a tendência completa). Barras por CR, cargo e
-  treinamento (rótulos quebram em 2 linhas); tabela paginada/classificável (`TabelaTreinamentos`,
-  reaproveitada com `editavel=false`). Botão **Tela cheia** (Fullscreen API) para TV. Botão info.
-  - **Filtro de mês**: abre no **mês atual** por padrão; sentinela `mes=todos` na URL = todos os
-    meses (usado por "Limpar filtros" e ao desmarcar). CR sempre em CAIXA ALTA (filtro e barras).
-- **Dados**: seed de dev `scripts/seed_treinamentos.mjs`. Importador de histórico de planilha
-  (Planilha2 de um xlsx) em `scripts/import_presenca.mjs` — resolução **dupla CPF→nome** no quadro
-  SRA (nome só casa se for match único), responsável "Importação (histórico)", 1h, encerrado;
-  **idempotente** (reexecutar substitui a importação anterior).
-
-### Portal do cliente Enjoei — Turnover + Absenteísmo (CR 68732)
-Segundo cliente do hub, no modelo de **portal de cliente** (como Atlas), espelhado dos painéis
-de RH do `hub_amyris` e recolorido para a marca **Enjoei** (roxo `#61005D`). Spec/plano:
-`docs/superpowers/specs/2026-08-27-portal-enjoei-turnover-absenteismo-design.md` e
-`docs/superpowers/plans/2026-08-27-portal-enjoei-turnover-absenteismo.md`.
-- **Duas telas** no domínio `clientes` de `domains.ts` (`ClienteHub` `enjoei`):
-  `enjoei-turnover` → `/dashboards/clientes/enjoei/turnover` e `enjoei-absenteismo` →
-  `/dashboards/clientes/enjoei/absenteismo`. Contratante `enjoei` em `cliente_contratante`
-  (`prisma/sql/013_cliente_enjoei.sql`); marca em `clientes-branding.ts` (`/logo_enjoei.svg`).
-- **Cor**: tokens Tailwind `enjoei`/`enjoei-mist`/`enjoei-grad` + paleta única
-  `src/components/clientes/enjoei/paleta.ts` (Recharts recebe hex). Estados semânticos
-  (falta=vermelho, férias=âmbar, folga=cinza) mantidos.
-- **Turnover** (`src/lib/clientes/enjoei/turnover.ts`, lê `vw_sra_geral`) e **Absenteísmo**
-  (`src/lib/clientes/enjoei/absenteismo.ts`, lê `ft_ponto_smartcontrol`) — ambos travados no
-  **CR 68732** (`CR_ENJOEI`): filtro de CR em toda query (Trava 1) + `assertLinhasNoEscopo`
-  defensivo (Trava 2, `escopo-dados.ts`, escopo `{ crs: ["68732"] }`).
-- **Absenteísmo é SEM meta** (sem linha de meta/badge) e **inclui todos os cargos** (sem
-  exclusão de categorias). Regra D-1 (o dia de hoje não entra). Aderência/absenteísmo por dia =
-  presenças/faltas ÷ escalados.
-- **Páginas server-side** (`dynamic`) com guard `assertTelaVisivel(...)`; componentes em
-  `src/components/clientes/enjoei/`. Portal enxuto/trava por URL do CLIENTE só testável em
-  **produção** (dev = admin).
-
-### Componentes reutilizáveis
-`src/components/ui/{Combobox,MultiCombobox,button,card,input,label}.tsx`,
-`src/components/dashboard/{InfoIndicador,FiltrosQuadro,BarrasQuadro,LinhaQuadro,EmConstrucao}.tsx`,
-`src/components/{TiltCard,HeroCanvas}.tsx`, `src/components/site/SiteHeader.tsx`,
-`src/components/brand/InhausLogo.tsx`. Formatadores: `src/lib/{format,nomes}.ts`.
+Invariantes que valem sempre (não dependem da skill estar carregada):
+- **CPF nunca em claro nem na URL** — identidade é **HMAC do CPF** (`EPI_CPF_SECRET`). Única
+  exceção: nos treinamentos, `cpf_texto` só de quem NÃO foi localizado na SRA.
+- Todo dado por CR/cliente passa pelas **duas travas** de isolamento (seção acima).
 
 ### Limitações de dados (importante)
 - `dt_demissao` está **vazia em todas as tabelas** do `db_inhaus` hoje → o card de
@@ -357,7 +201,6 @@ renomear; a regra vale só daqui para frente.
   e `EPI_CPF_SECRET` (segredo do HMAC do CPF no módulo de EPI).
 
 ### Documentos
-- Spec de design: `docs/superpowers/specs/2026-07-27-hub-indicadores-inhaus-design.md`.
 - Plano de implementação: `docs/superpowers/plans/2026-07-27-fundacao-visual-hub-inhaus.md`.
 
 ---
