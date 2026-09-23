@@ -78,6 +78,11 @@ describe("ROL, MC e % Margem", () => {
     const r = resumo({ realizado: 20, orcado: 10, rolRealizado: 100, rolOrcado: 100 }, "diferenca")
     expect(r.margem).toBeCloseTo(10)
   })
+  it("na diferença % a margem não é calculada (—)", () => {
+    const r = resumo({ realizado: 20, orcado: 10, rolRealizado: 100, rolOrcado: 100 }, "diferenca_pct")
+    expect(r.margem).toBeNull()
+    expect(r.mc).toBeCloseTo(100)
+  })
 })
 
 describe("tom e formatação", () => {

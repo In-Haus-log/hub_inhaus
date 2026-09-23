@@ -12,6 +12,7 @@ import type { Medida } from "./parametros"
  *  - Diferença = Realizado − Orçado. Diferença % = Diferença ÷ |Orçado|. Com o sinal
  *    contábil, positivo é sempre favorável. Orçado = 0 ⇒ "—".
  *  - Mês sem lançamento ⇒ célula vazia (nunca zero inventado).
+ *  - % Margem por medida: Realizado/Orçado = MC ÷ ROL; Diferença (R$) = margem realizada − margem orçada, em pontos percentuais (p.p.); Diferença (%) = "—" (não se calcula variação percentual de um percentual).
  * Módulo PURO.
  */
 
