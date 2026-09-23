@@ -227,6 +227,13 @@ export const DOMINIOS: Dominio[] = [
         emBreve: true,
       },
       {
+        key: "projecoes-analise",
+        label: "Projeções",
+        href: "/dashboards/financeiro/projecoes",
+        palavrasChave: ["realizado", "orcado", "orçado", "dre", "resultado", "margem", "rol", "mc", "re x ro"],
+        icone: BarChart3,
+      },
+      {
         key: "custo-pessoal",
         label: "Custo de pessoal",
         href: "/dashboards/financeiro/custo-pessoal",
