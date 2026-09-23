@@ -104,7 +104,7 @@ seguido dos models no `schema.prisma` e `prisma generate`.
 | **Derivadas** (`GENERATED ALWAYS AS … STORED`, o RPA não grava): | | | |
 | `cr_cod` | text | código de 5 chars do `cr` | mesma regra de `codigoCr` |
 | `pec_cod` | text | 6 primeiros chars do `pec` | |
-| `pec_situacao` | text | trecho após o último `/ ` do `pec` | `ATIVO` \| `DESMOB` |
+| `pec_situacao` | text | trecho após o último `/ ` do `pec` | `ATIVO` \| `ENCERRADO` \| `APRENDIZ/INDIRETO` |
 | `conta_mae` | text | `left(conta, 5)` | liga na `dm_conta` |
 
 Índices: `(competencia)`, `(cr_cod, competencia)`, `(conta_mae, competencia)`, `(pec_cod)`.
@@ -123,7 +123,7 @@ seguido dos models no `schema.prisma` e `prisma generate`.
 | `ordem` | int | ordem de exibição no DRE |
 | `ativo` | boolean | default true |
 
-Carga inicial: as 31 linhas do BI 1.2.05 (31101 … 44101), com nome e ordem do BI.
+Carga inicial: as 30 linhas do BI 1.2.05 (31101 … 44101), com nome e ordem do BI.
 
 ### 5.3 `ft_carga_real_orcado` (log de cargas)
 
@@ -165,20 +165,21 @@ Script de histórico: `scripts/import_real_orcado.mjs <arquivo.xlsx>` — mesma 
 
 | Controle | Opções |
 |---|---|
-| **Linhas** (empilháveis, ordem livre) | Gerente · Supervisor · PEC · CR · Cliente · Regional · Negócio · Situação do PEC · Grupo de contas · Conta (linha do DRE) · Subconta |
+| **Linhas** (empilháveis, ordem livre) | Gerente · Supervisor · PEC · CR · Cliente · Regional · Negócio · Situação do PEC (Ativo/Encerrado/Aprendiz-Indireto) · Grupo de contas · Conta (linha do DRE) · Subconta |
 | **Colunas** | Meses do período + **Total do período** |
 | **Valores** | **Realizado** (padrão) · Orçado · Diferença R$ · Diferença % |
 | **Filtros** | Período (de/até) + qualquer dimensão das linhas |
 
 Estado na URL (compartilhável). **Padrão de abertura:** Linhas = Conta, últimos 12 meses
-com dado — reproduz o BI 1.2.05. Botão **"Salvar como meu padrão"** (por usuário).
+com dado — reproduz o BI 1.2.05. Botão **"Salvar como meu padrão"** (guardado no navegador do usuário).
 
 ### 6.2 Regras de cálculo
 
 - **Valor de uma célula** = soma dos lançamentos que caem naquela combinação de linha × mês,
   no valor escolhido. Receita positiva, custo negativo (como no BI).
-- **Linhas de resumo** ao fim de cada nível aberto e no total geral: **ROL**, **MC**,
-  **% Margem** (seção 2).
+- **Linhas de resumo** (**ROL**, **MC**, **% Margem** — seção 2) ao fim de cada linha aberta
+  de dimensão organizacional (gerente, CR, PEC, cliente…) e no total geral. Não aparecem sob
+  linhas de conta/grupo/subconta, onde ROL e MC não fazem sentido.
 - **Diferença R$** = Realizado − Orçado. **Diferença %** = (Realizado − Orçado) ÷ |Orçado|.
   Com o sinal contábil (receita +, custo −), diferença **positiva é sempre favorável**: verde
   = melhor que o orçado, vermelho = pior.
@@ -187,11 +188,11 @@ com dado — reproduz o BI 1.2.05. Botão **"Salvar como meu padrão"** (por usu
 
 ### 6.3 Interação
 
-- ⊞/⊟ abre/fecha cada linha; "abrir/fechar nível" por dimensão.
+- ⊞/⊟ abre/fecha cada linha; botões **"Abrir 1º nível"** e **"Recolher tudo"**.
 - Cada nível é buscado **sob demanda** ao expandir (agregação no servidor com os filtros dos
   níveis-pai), para não trazer tudo de uma vez.
 - **Clique num número** ⇒ janela com os lançamentos que o compõem (competência, conta,
-  histórico, lote, CR, valor), paginada, com **exportar para Excel**.
+  histórico, lote, CR, valor), paginada, com **exportar para Excel** (arquivo CSV que abre direto no Excel).
 - Rodapé: **"Dados atualizados em dd/mm às hh:mm"** (última carga `OK`).
 - Botão **info** (`InfoIndicador`) ao lado do título, com as regras da 6.2 em linguagem de
   negócio e o exemplo de julho/2026.
