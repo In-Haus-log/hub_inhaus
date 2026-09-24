@@ -341,7 +341,9 @@ function FormularioCriar({
           <p className="mt-1.5 text-xs text-muted-foreground">
             {isAdmin && !ehCliente
               ? "Como administrador interno, este usuário vê os dados de todos os CRs."
-              : "Gerentes: vincule os CRs da carteira. Sem CR vinculado, os indicadores por CR ficam vazios."}
+              : "Gerentes: vincule os CRs da carteira. Sem CR vinculado, os indicadores por CR ficam vazios."}{" "}
+            Esses CRs valem para TODOS os indicadores recortados por CR (ex.: Projeções, Controle
+            de Quadro), não só para um indicador específico.
           </p>
         </div>
         <div className="flex flex-col justify-end gap-2">
@@ -479,7 +481,9 @@ function EditorAcesso({
         <p className="mt-1.5 text-xs text-muted-foreground">
           {isAdmin && !ehCliente
             ? "Como administrador interno, este usuário vê os dados de todos os CRs."
-            : "Gerentes: vincule os CRs da carteira. Sem CR vinculado, os indicadores por CR ficam vazios."}
+            : "Gerentes: vincule os CRs da carteira. Sem CR vinculado, os indicadores por CR ficam vazios."}{" "}
+          Esses CRs valem para TODOS os indicadores recortados por CR (ex.: Projeções, Controle de
+          Quadro), não só para um indicador específico.
         </p>
       </div>
       <div className="mt-4 flex items-center justify-end">

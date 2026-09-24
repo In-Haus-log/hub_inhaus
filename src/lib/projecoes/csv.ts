@@ -18,8 +18,12 @@ export type Lancamento = {
 
 const CABECALHO = ["Mês", "Conta", "Descrição", "CR", "PEC", "Histórico", "Lote", "Origem", "Realizado", "Orçado"]
 
+// Campos de texto que começam com =, +, -, @, tab ou retorno de carro viram fórmula
+// ao abrir no Excel — prefixa um ' para neutralizar (só em texto; números legítimos
+// começam com "-" e são formatados à parte, em `numero()`).
 function texto(v: string | null): string {
-  const s = v ?? ""
+  let s = v ?? ""
+  if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`
   return /[;"\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
 }
 
