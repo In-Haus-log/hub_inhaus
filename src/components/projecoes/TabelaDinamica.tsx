@@ -90,9 +90,12 @@ export function TabelaDinamica({
             "w-full rounded-md px-2 py-1 text-right tabular-nums hover:bg-teal-tint focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal",
             COR_TOM[tom(estado.medida, v)],
           )}
-          aria-label={`Ver lançamentos de ${titulo}${mes ? ` em ${rotuloMes(mes)}` : " no período"}`}
         >
           {formatarCelula(estado.medida, v)}
+          <span className="sr-only">
+            , ver lançamentos de {titulo}
+            {mes ? ` em ${rotuloMes(mes)}` : " no período"}
+          </span>
         </button>
       </td>
     )

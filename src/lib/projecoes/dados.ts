@@ -94,5 +94,6 @@ export async function getOpcoes(
 ): Promise<{ value: string; label: string }[]> {
   const { sql, params } = montarConsultaOpcoes(dim, r, escopo)
   const { rows } = await inhausPool.query<{ valor: string; rotulo: string }>(sql, params)
+  if (dim === "cr") assertLinhasNoEscopo(rows, (l) => l.valor, escopo)
   return rows.map((l) => ({ value: l.valor, label: l.rotulo || l.valor }))
 }

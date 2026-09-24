@@ -83,7 +83,7 @@ export default async function ProjecoesPage({
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
           {erro}
         </div>
-      ) : !estado.periodo || !totais ? (
+      ) : !estado.periodo || !totais || meses.length === 0 ? (
         <div className="glass rounded-3xl p-8 text-center text-sm text-muted-foreground">
           Ainda não há lançamentos carregados para a sua carteira. Assim que a primeira carga do
           relatório Realizado × Orçado for feita, a análise aparece aqui.

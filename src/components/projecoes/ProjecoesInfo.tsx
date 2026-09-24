@@ -10,7 +10,7 @@ export function ProjecoesInfo() {
       <div className="space-y-3 text-sm">
         <p>
           Cada número é a <strong>soma dos lançamentos</strong> daquela linha no mês. Receitas
-          aparecem <strong>positivas</strong> e custos <strong>negativos</strong>, como no BI.
+          aparecem <strong>positivas</strong> e custos <strong>negativos</strong>, como no relatório de resultado.
         </p>
         <ul className="list-disc space-y-1 pl-4">
           <li>
