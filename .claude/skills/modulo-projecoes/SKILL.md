@@ -15,7 +15,8 @@ Plano: `docs/superpowers/plans/2026-09-23-projecoes-base-historica.md`.
   GERADAS `cr_cod`, `pec_cod`, `pec_situacao`, `conta_mae` — nunca gravar), `dm_conta` (30 linhas
   do BI 1.2.05: nome/ordem/grupo), `ft_carga_real_orcado` (log de cargas).
 - **Carga:** `scripts/carga_real_orcado.py` (referência para o RPA, Python + psycopg2): numa
-  transação apaga os meses do arquivo e reinsere; falha ⇒ rollback + registro `ERRO`.
+  transação trava exclusiva de carga (advisory lock, impede cargas simultâneas duplicarem
+  um mês), apaga os meses do arquivo e reinsere; falha ⇒ rollback + registro `ERRO`.
   Simulação por padrão; `--apply` grava. Idempotente.
 - **Regras:** ROL = grupo `3 - RECEITA` (receita bruta + deduções); MC = soma de tudo (TOTAL do BI);
   % Margem = MC ÷ ROL. Diferença % = (R − O) ÷ |O|; positivo = favorável. Mês sem dado = vazio.

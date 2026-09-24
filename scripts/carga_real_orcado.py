@@ -4,6 +4,7 @@ tabela public.ft_real_orcado do db_inhaus. É o script de carga do histórico e 
 implementação de REFERÊNCIA para o RPA (mesma regra).
 
 Regra de carga (spec 2026-09-23, §5.4), numa ÚNICA transação:
+  0. trava exclusiva de carga (advisory lock) para impedir cargas simultâneas;
   1. registra a execução em ft_carga_real_orcado;
   2. apaga de ft_real_orcado os meses de competência presentes no arquivo;
   3. insere todos os lançamentos do arquivo (com carga_id);
@@ -64,6 +65,9 @@ COLUNAS_VALOR = {"valor_realizado", "valor_orcado"}
 # Lidas como texto para não perder zeros à esquerda nem virar número (ex.: CONTA, LOTE).
 COLUNAS_TEXTO_EXPORT = [c for c, db in COLUNAS_EXPORT.items() if db not in COLUNAS_VALOR]
 CENTAVO = Decimal("0.01")
+# Chave fixa do lock de carga (trava exclusiva — impede duas cargas simultâneas de
+# apagarem/reinserirem os mesmos meses e duplicar lançamentos). Ver spec §5.4.
+TRAVA_CARGA_KEY = 20260923
 
 
 def competencia_de(mes: Any) -> date:
@@ -141,6 +145,10 @@ def carregar(conn, registros: list[dict[str, Any]], origem: str) -> int:
     colunas = COLUNAS_DB + ["carga_id"]
     try:
         with conn.cursor() as cur:
+            # Trava exclusiva: só uma carga por vez grava — sem ela, duas cargas
+            # simultâneas em READ COMMITTED podem duplicar o mês (cada DELETE não
+            # vê as linhas que a outra transação ainda vai inserir).
+            cur.execute("select pg_advisory_xact_lock(%s)", (TRAVA_CARGA_KEY,))
             cur.execute(
                 "insert into ft_carga_real_orcado (origem, competencias) values (%s, %s) returning id",
                 (origem, r["competencias"]),
@@ -163,14 +171,19 @@ def carregar(conn, registros: list[dict[str, Any]], origem: str) -> int:
         conn.commit()
         return carga_id
     except Exception as erro:
-        conn.rollback()
-        with conn.cursor() as cur:
-            cur.execute(
-                """insert into ft_carga_real_orcado (origem, competencias, concluido_em, status, mensagem)
-                   values (%s, %s, now(), 'ERRO', %s)""",
-                (origem, r["competencias"], str(erro)[:1000]),
-            )
-        conn.commit()
+        # Registrar o ERRO é best-effort: se essa parte falhar, a exceção ORIGINAL
+        # ainda deve propagar (nunca mascarada pela falha ao registrar o erro).
+        try:
+            conn.rollback()
+            with conn.cursor() as cur:
+                cur.execute(
+                    """insert into ft_carga_real_orcado (origem, competencias, concluido_em, status, mensagem)
+                       values (%s, %s, now(), 'ERRO', %s)""",
+                    (origem, r["competencias"], str(erro)[:1000]),
+                )
+            conn.commit()
+        except Exception:
+            pass
         raise
 
 

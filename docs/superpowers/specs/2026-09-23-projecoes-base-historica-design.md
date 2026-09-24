@@ -145,6 +145,9 @@ Carga inicial: as 30 linhas do BI 1.2.05 (31101 … 44101), com nome e ordem do 
 ### 5.4 Contrato de carga (RPA e script)
 
 Numa **única transação**:
+0. Trava exclusiva de carga (advisory lock) para impedir cargas simultâneas — sem
+   ela, duas cargas sobrepostas em READ COMMITTED podem duplicar um mês (o segundo
+   `DELETE` não enxerga as linhas que a primeira carga ainda vai inserir).
 1. Insere a linha em `ft_carga_real_orcado` (status provisório).
 2. `DELETE FROM ft_real_orcado WHERE competencia = ANY(<meses do arquivo>)`.
 3. Insere todos os lançamentos do arquivo com `carga_id`.
