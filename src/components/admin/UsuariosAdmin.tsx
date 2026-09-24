@@ -342,7 +342,7 @@ function FormularioCriar({
             {isAdmin && !ehCliente
               ? "Como administrador interno, este usuário vê os dados de todos os CRs."
               : "Gerentes: vincule os CRs da carteira. Sem CR vinculado, os indicadores por CR ficam vazios."}{" "}
-            Esses CRs valem para TODOS os indicadores recortados por CR (ex.: Projeções, Controle
+            Esses CRs valem para TODOS os indicadores recortados por CR (ex.: RE x OR, Controle
             de Quadro), não só para um indicador específico.
           </p>
         </div>
@@ -482,7 +482,7 @@ function EditorAcesso({
           {isAdmin && !ehCliente
             ? "Como administrador interno, este usuário vê os dados de todos os CRs."
             : "Gerentes: vincule os CRs da carteira. Sem CR vinculado, os indicadores por CR ficam vazios."}{" "}
-          Esses CRs valem para TODOS os indicadores recortados por CR (ex.: Projeções, Controle de
+          Esses CRs valem para TODOS os indicadores recortados por CR (ex.: RE x OR, Controle de
           Quadro), não só para um indicador específico.
         </p>
       </div>

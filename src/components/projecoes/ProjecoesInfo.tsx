@@ -1,7 +1,7 @@
 import { InfoIndicador } from "@/components/dashboard/InfoIndicador"
 
 /**
- * Regras do Projeções em linguagem de negócio. Manter em sincronia com o topo de
+ * Regras do RE x OR em linguagem de negócio. Manter em sincronia com o topo de
  * src/lib/projecoes/calculos.ts — qualquer mudança de cálculo atualiza este texto.
  */
 export function ProjecoesInfo() {

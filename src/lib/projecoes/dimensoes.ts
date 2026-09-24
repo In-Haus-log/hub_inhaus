@@ -1,5 +1,5 @@
 /**
- * Dimensões da tabela dinâmica do Projeções (chave estável → rótulo).
+ * Dimensões da tabela dinâmica do RE x OR (chave estável → rótulo).
  * Módulo PURO: usado no client (controles) e no server (montagem do SQL).
  * O mapeamento chave → coluna do banco fica em consulta.ts (só no server).
  */

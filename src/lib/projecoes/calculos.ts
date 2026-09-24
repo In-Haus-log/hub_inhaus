@@ -3,7 +3,7 @@ import { formatarNumero, formatarPercentual, formatarVariacao } from "@/lib/form
 import type { Medida } from "./parametros"
 
 /**
- * REGRAS DE NEGÓCIO do Projeções (em sincronia com o botão info — ProjecoesInfo):
+ * REGRAS DE NEGÓCIO do RE x OR (em sincronia com o botão info — ProjecoesInfo):
  *  - Valor de uma célula = soma dos lançamentos daquela linha × mês. Receita é
  *    positiva e custo negativo (como no BI).
  *  - ROL = soma do grupo de Receita (receita bruta + deduções/impostos sobre faturamento).

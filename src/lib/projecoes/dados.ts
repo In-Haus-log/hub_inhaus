@@ -15,7 +15,7 @@ import type { DimensaoKey } from "./dimensoes"
 import type { Medida } from "./parametros"
 
 /**
- * Leitura do Projeções no db_inhaus (ft_real_orcado + dm_conta). Server-only.
+ * Leitura do RE x OR no db_inhaus (ft_real_orcado + dm_conta). Server-only.
  * TRAVA 1 vem do SQL (consulta.ts). TRAVA 2 aqui: sempre que o CR vem na saída
  * (nível CR e lançamentos), confere que nenhuma linha escapou do escopo.
  */

@@ -4,7 +4,7 @@ import type { DimensaoKey } from "./dimensoes"
 import type { Filtros, Medida, Periodo } from "./parametros"
 
 /**
- * Montagem do SQL do Projeções. Módulo PURO (só gera texto + parâmetros).
+ * Montagem do SQL do RE x OR. Módulo PURO (só gera texto + parâmetros).
  *
  * TRAVA 1 (isolamento por CR): TODA consulta passa por `montarWhere`, que injeta
  * `predicadoSraCr(escopo, "f.cr", n)`. A Trava 2 fica em dados.ts, sobre a saída.

@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma"
 export const dynamic = "force-dynamic"
 
 // Lista os grupos de cliente e os CRs da dm_cr para os seletores da tela de Usuários.
-// Inclui também os CRs que só existem no Projeções (ft_real_orcado) e ainda não foram
+// Inclui também os CRs que só existem no RE x OR (ft_real_orcado) e ainda não foram
 // cadastrados na dm_cr — sem isso, o gerente daquele CR não tem como ser vinculado.
 export async function GET() {
   const g = await guardAdmin()

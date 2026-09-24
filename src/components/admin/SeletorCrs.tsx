@@ -9,7 +9,7 @@ type Resposta = { crs: { cr: string; descricao: string | null }[] }
 
 /**
  * Escopo de DADOS por CR (Eixo 2): quais CRs o usuário enxerga nos indicadores por CR
- * (ex.: Projeções). Gerente = os CRs da carteira dele. Admin interno vê todos.
+ * (ex.: RE x OR). Gerente = os CRs da carteira dele. Admin interno vê todos.
  */
 export function SeletorCrs({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {
   const [opcoes, setOpcoes] = React.useState<ComboOption[]>([])

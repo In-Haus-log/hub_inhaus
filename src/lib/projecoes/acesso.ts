@@ -5,7 +5,7 @@ import { acessoLivreLiberado } from "@/lib/dev-auth"
 import { resolverEscopoDados, type EscopoDados } from "@/lib/seguranca/escopo-dados"
 
 /**
- * Acesso ao Projeções. Duas perguntas separadas:
+ * Acesso ao RE x OR. Duas perguntas separadas:
  *  - QUAL TELA (Eixo 1): a tela `projecoes-analise` precisa estar concedida (admin passa).
  *  - QUAIS DADOS (Eixo 2): o escopo de CRs do usuário (gestão = todos; gerente = os seus).
  * Honra o acesso livre de dev (Visitante admin interno vê tudo).

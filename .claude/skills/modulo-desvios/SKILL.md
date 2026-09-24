@@ -23,7 +23,7 @@ Primeiro módulo de **cliente** do hub. Handoff completo:
   (`desvio_opcao`, SQL `010`, `opcoes-cliente.ts`, diálogo admin `ConfiguradorListas`).
 - **Tela de Usuários:** seletor de telas **agrupado** (`SeletorTelas`: áreas internas + por
   cliente) + toggle **"É cliente?"**. O seletor de **CR** foi **reativado** (`SeletorCrs`, para o
-  módulo Projeções — vale para todos os indicadores por CR). Os seletores de Clientes/Contratante
+  indicador RE x OR — vale para todos os indicadores por CR). Os seletores de Clientes/Contratante
   continuam sem UI (o back-end de escopo por eles continua existindo).
 - Pendências no handoff (§10): isolamento por URL p/ internos não-admin; readicionar seletor de
   CR quando preciso; decidir se EPI migra p/ telas visíveis; validar 2º cliente.

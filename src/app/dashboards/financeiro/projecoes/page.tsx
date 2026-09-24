@@ -22,7 +22,7 @@ import {
   periodoPadrao,
 } from "@/lib/projecoes/parametros"
 
-export const metadata: Metadata = { title: "Projeções" }
+export const metadata: Metadata = { title: "RE x OR" }
 
 // Lê a base a cada requisição (sem prerender no build).
 export const dynamic = "force-dynamic"
@@ -59,7 +59,7 @@ export default async function ProjecoesPage({
       ;[raiz, totais] = await Promise.all([getNivel(estado.niveis[0], recorte, escopo), getTotais(recorte, escopo)])
     }
   } catch (e) {
-    erro = e instanceof Error ? e.message : "Falha ao consultar a base do Projeções."
+    erro = e instanceof Error ? e.message : "Falha ao consultar a base do RE x OR."
   }
 
   const colunas = estado.periodo ? mesesEntre(estado.periodo.de, estado.periodo.ate) : []
@@ -70,7 +70,7 @@ export default async function ProjecoesPage({
       <section className="reveal">
         <span className="eyebrow">Financeiro</span>
         <div className="mt-3 flex items-center gap-2.5">
-          <h1 className="font-display text-3xl font-semibold tracking-tight text-navy">Projeções</h1>
+          <h1 className="font-display text-3xl font-semibold tracking-tight text-navy">RE x OR</h1>
           <ProjecoesInfo />
         </div>
         <p className="mt-1 text-sm text-muted-foreground">
