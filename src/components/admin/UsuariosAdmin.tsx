@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
 import { SeletorTelas } from "@/components/admin/SeletorTelas"
+import { SeletorCrs } from "@/components/admin/SeletorCrs"
 import { ToastProvider, useToast } from "@/components/ui/toast"
 import { cn } from "@/lib/utils"
 
@@ -269,6 +270,7 @@ function FormularioCriar({
   const [isAdmin, setIsAdmin] = React.useState(false)
   const [seguranca, setSeguranca] = React.useState(false)
   const [telas, setTelas] = React.useState<string[]>([])
+  const [crs, setCrs] = React.useState<string[]>([])
   const [ehCliente, setEhCliente] = React.useState(false)
   const [ocupado, setOcupado] = React.useState(false)
 
@@ -296,6 +298,7 @@ function FormularioCriar({
           hasAccess: true,
           visibleScreens: telas,
           classificacao,
+          crs,
         }),
       })
       const d = await r.json()
@@ -332,6 +335,15 @@ function FormularioCriar({
           <SeletorTelas value={telas} onChange={setTelas} />
           <p className="mt-1.5 text-xs text-muted-foreground">Administradores veem todas as telas.</p>
         </Campo>
+        <div className="mt-3 max-w-sm">
+          <label className="mb-1.5 block text-sm font-medium text-navy">CRs que pode ver (dados)</label>
+          <SeletorCrs value={crs} onChange={setCrs} />
+          <p className="mt-1.5 text-xs text-muted-foreground">
+            {isAdmin && !ehCliente
+              ? "Como administrador interno, este usuário vê os dados de todos os CRs."
+              : "Gerentes: vincule os CRs da carteira. Sem CR vinculado, os indicadores por CR ficam vazios."}
+          </p>
+        </div>
         <div className="flex flex-col justify-end gap-2">
           <label className="flex items-center gap-2 text-sm text-navy">
             <Checkbox checked={ehCliente} onCheckedChange={(v) => setEhCliente(!!v)} />
@@ -378,6 +390,7 @@ function EditorAcesso({
   const [isAdmin, setIsAdmin] = React.useState(usuario.isAdmin)
   const [seguranca, setSeguranca] = React.useState(usuario.ehSeguranca)
   const [telas, setTelas] = React.useState<string[]>(usuario.visibleScreens)
+  const [crs, setCrs] = React.useState<string[]>(usuario.crs)
   const [ehCliente, setEhCliente] = React.useState(usuario.classificacao === "CLIENTE")
   const [ocupado, setOcupado] = React.useState(false)
 
@@ -402,6 +415,7 @@ function EditorAcesso({
           seguranca,
           visibleScreens: telas,
           classificacao,
+          crs,
         }),
       })
       const d = await r.json()
@@ -458,6 +472,15 @@ function EditorAcesso({
         {isAdmin && (
           <p className="mt-1.5 text-xs text-muted-foreground">Como administrador, este usuário vê todas as telas.</p>
         )}
+      </div>
+      <div className="mt-3 max-w-sm">
+        <label className="mb-1.5 block text-sm font-medium text-navy">CRs que pode ver (dados)</label>
+        <SeletorCrs value={crs} onChange={setCrs} />
+        <p className="mt-1.5 text-xs text-muted-foreground">
+          {isAdmin && !ehCliente
+            ? "Como administrador interno, este usuário vê os dados de todos os CRs."
+            : "Gerentes: vincule os CRs da carteira. Sem CR vinculado, os indicadores por CR ficam vazios."}
+        </p>
       </div>
       <div className="mt-4 flex items-center justify-end">
         <Button type="button" variant="gradient" size="sm" onClick={salvar} disabled={ocupado}>
