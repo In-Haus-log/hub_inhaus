@@ -155,6 +155,7 @@ trabalha no módulo. **Leia a skill antes de mexer no módulo.**
 - **Treinamentos + Controle de Capacitação** (`/t/[token]`) → `modulo-treinamentos`.
 - **Portal Enjoei** (CR 68732) → `portal-enjoei`.
 - **RE x OR** (Financeiro; Realizado × Orçado do relatório RE x RO, `src/lib/projecoes`) → `modulo-projecoes`.
+- **Flash Report** (Financeiro; projeção semanal de receita por PEC, `src/lib/flash`) → `modulo-flash-report`.
 
 Invariantes que valem sempre (não dependem da skill estar carregada):
 - **CPF nunca em claro nem na URL** — identidade é **HMAC do CPF** (`EPI_CPF_SECRET`). Única
