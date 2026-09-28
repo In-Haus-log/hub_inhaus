@@ -25,4 +25,8 @@ describe("validação", () => {
     expect(periodoSchema.safeParse({ mes: "2026-09", semana: "2" }).data).toEqual({ mes: "2026-09", semana: 2 })
     expect(periodoSchema.safeParse({ mes: "2026-9", semana: 6 }).success).toBe(false)
   })
+  it("semana precisa existir no mês (fev/2027 tem 4 semanas)", () => {
+    expect(periodoSchema.safeParse({ mes: "2027-02", semana: 5 }).success).toBe(false)
+    expect(periodoSchema.safeParse({ mes: "2026-09", semana: 5 }).success).toBe(true)
+  })
 })

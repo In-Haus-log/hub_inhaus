@@ -1,6 +1,7 @@
 import { z } from "zod"
 
 import { TIPOS, type TipoItem } from "./calculos"
+import { semanasDoMes } from "./semanas"
 
 const numero = z.coerce.number({ invalid_type_error: "Informe um número" }).finite("Informe um número")
 
@@ -24,10 +25,12 @@ export const rascunhoSchema = z.object({
 
 export const reaberturaSchema = z.object({ motivo: z.string().trim().min(3, "Informe o motivo da reabertura").max(300) })
 
+export const mesSchema = z.object({ mes: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "Mês inválido") })
+
 export const periodoSchema = z.object({
-  mes: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "Mês inválido"),
+  mes: mesSchema.shape.mes,
   semana: z.coerce.number().int().min(1).max(5),
-})
+}).refine((p) => semanasDoMes(p.mes).includes(p.semana), { message: "Esta semana não existe no mês.", path: ["semana"] })
 
 export function validarQuantidades(
   linhas: { itemId: number; quantidade: number }[],

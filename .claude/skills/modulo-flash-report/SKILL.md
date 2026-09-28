@@ -41,7 +41,9 @@ unitário **congelado**), `ft_flash_evento` (ENVIO/REABERTURA, quem, motivo).
 - Item = valor unitário × quantidade; DESCONTO negativo. Bruta = Σ itens. Líquida = bruta × (1 − alíquota).
 - Alíquota (provisória) = −impostos (31201) ÷ receita bruta (31101) do PEC nos últimos 3 meses do RE x OR; sem histórico → `ALIQUOTA_PADRAO` (14,25%).
 - Semana nova = cópia da última **ENVIADA**; itens novos com qtd padrão; desativados saem.
-- Tarifa alterada recalcula só semanas não enviadas. Semana enviada é imutável (409) até o financeiro reabrir.
+- Tarifa alterada / item novo ou desativado afetam só semanas em RASCUNHO. REABERTO mantém composição e valores congelados.
+- Semana enviada é imutável (409) até o financeiro reabrir; status relido com `for update` na transação (corrida envio × autosave) e reabertura condicional no SQL.
+- `periodoSchema` rejeita semana que não existe no mês. PEC nunca troca de CR ao ser re-habilitado; semanas de outro CR não aparecem.
 - Realizado de comparação = ROL (`grupo1 like '3%'`) do RE x OR.
 
 ## Pendências do usuário (lembrar)

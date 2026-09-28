@@ -10,7 +10,7 @@ import { assertTelaVisivel } from "@/lib/dashboard-acesso"
 import { escopoDaPagina, TELA_FLASH_CONSOLIDADO } from "@/lib/flash/acesso"
 import { consolidado, type LinhaConsolidado } from "@/lib/flash/dados"
 import { semanaDoMes, semanasDoMes } from "@/lib/flash/semanas"
-import { periodoSchema } from "@/lib/flash/validacao"
+import { mesSchema } from "@/lib/flash/validacao"
 import { tituloNome } from "@/lib/nomes"
 import { cn } from "@/lib/utils"
 
@@ -40,7 +40,7 @@ export default async function ConsolidadoPage({
   await assertTelaVisivel(TELA_FLASH_CONSOLIDADO)
   const escopo = await escopoDaPagina()
   const hoje = semanaDoMes(new Date())
-  const lido = periodoSchema.pick({ mes: true }).safeParse({ mes: searchParams.mes })
+  const lido = mesSchema.safeParse({ mes: searchParams.mes })
   const mes = lido.success ? lido.data.mes : hoje.mes
   const semanas = semanasDoMes(mes)
   // Semana de referência do painel de envio: a atual no mês corrente; a última nos meses passados.

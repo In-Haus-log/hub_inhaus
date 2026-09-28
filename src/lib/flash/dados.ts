@@ -117,8 +117,7 @@ export async function habilitarPec(escopo: EscopoDados, pecCod: string, usuario:
   if (!pec) throw new ErroFlash("PEC não encontrado ou fora do seu escopo.", 404)
   await inhausPool.query(
     `insert into public.dm_flash_pec (pec_cod, pec_nome, cr_cod, gerente, criado_por) values ($1,$2,$3,$4,$5)
-     on conflict (pec_cod) do update set ativo = true, pec_nome = excluded.pec_nome,
-       cr_cod = excluded.cr_cod, gerente = excluded.gerente`,
+     on conflict (pec_cod) do update set ativo = true, pec_nome = excluded.pec_nome, gerente = excluded.gerente`,
     [pec.pecCod, pec.pecNome, pec.crCod, pec.gerente, usuario],
   )
 }
@@ -131,8 +130,8 @@ export async function listarMeusPecs(escopo: EscopoDados, periodo: Periodo): Pro
             s.status, coalesce(s.receita_bruta,0)::float8 as bruta, coalesce(s.receita_liquida,0)::float8 as liquida,
             a.receita_liquida::float8 as liquida_ant
        from public.dm_flash_pec p
-       left join public.ft_flash_semana s on s.pec_cod = p.pec_cod and s.mes = $1::date and s.semana = $2
-       left join public.ft_flash_semana a on a.pec_cod = p.pec_cod and a.mes = $3::date and a.semana = $4
+       left join public.ft_flash_semana s on s.pec_cod = p.pec_cod and s.cr_cod = p.cr_cod and s.mes = $1::date and s.semana = $2
+       left join public.ft_flash_semana a on a.pec_cod = p.pec_cod and a.cr_cod = p.cr_cod and a.mes = $3::date and a.semana = $4
       where p.ativo${f.sql}
       order by p.gerente nulls last, p.pec_cod`,
     [mesParaData(periodo.mes), periodo.semana, mesParaData(ant.mes), ant.semana, ...f.params],
@@ -153,11 +152,13 @@ export async function listarMeusPecs(escopo: EscopoDados, periodo: Periodo): Pro
 // ---- Itens (parametrização) ----------------------------------------------------------
 
 export async function listarItens(escopo: EscopoDados, pecCod: string): Promise<Item[]> {
-  await garantirPecNoEscopo(escopo, pecCod)
+  const pec = await garantirPecNoEscopo(escopo, pecCod)
+  const f = filtroCr(escopo, "i.cr_cod", 3)
   const { rows } = await inhausPool.query(
-    `select * from public.dm_flash_item where pec_cod = $1 order by ativo desc, ordem, id`,
-    [pecCod],
+    `select * from public.dm_flash_item i where i.pec_cod = $1 and i.cr_cod = $2${f.sql} order by ativo desc, ordem, id`,
+    [pecCod, pec.crCod, ...f.params],
   )
+  assertLinhasNoEscopo(rows, (r) => r.cr_cod, escopo)
   return rows.map(linhaParaItem)
 }
 
@@ -189,7 +190,7 @@ export async function salvarItem(
       `update public.ft_flash_semana_item si set valor_unitario = $1,
               total = round(($1 * si.quantidade * case when $3 = 'DESCONTO' then -1 else 1 end)::numeric, 2)
          from public.ft_flash_semana s
-        where si.semana_id = s.id and si.item_id = $2 and s.status <> 'ENVIADO'
+        where si.semana_id = s.id and si.item_id = $2 and s.status = 'RASCUNHO'
         returning s.id, s.aliquota`,
       [d.valorUnitario, rows[0].id, d.tipo],
     )
@@ -251,13 +252,14 @@ async function linhasDaSemana(c: Executor, id: number): Promise<LinhaSemana[]> {
 
 /** Última semana ENVIADA estritamente antes do período (para copiar e comparar). */
 async function ultimaEnviadaAntes(
-  pecCod: string,
+  pec: PecFlash,
   p: Periodo,
 ): Promise<{ linhas: LinhaSemana[]; liquida: number } | null> {
   const { rows } = await inhausPool.query(
-    `select id, receita_liquida::float8 as liquida from public.ft_flash_semana where pec_cod=$1 and status='ENVIADO'
+    `select id, receita_liquida::float8 as liquida from public.ft_flash_semana
+      where pec_cod=$1 and cr_cod=$4 and status='ENVIADO'
         and (mes, semana) < ($2::date, $3::smallint) order by mes desc, semana desc limit 1`,
-    [pecCod, mesParaData(p.mes), p.semana],
+    [pec.pecCod, mesParaData(p.mes), p.semana, pec.crCod],
   )
   if (!rows[0]) return null
   return { linhas: await linhasDaSemana(inhausPool, Number(rows[0].id)), liquida: rows[0].liquida }
@@ -271,11 +273,13 @@ async function gravarTotais(c: Executor, id: number, itens: Item[], aliquota: nu
   )
 }
 
-async function buscarCabecalho(pecCod: string, p: Periodo) {
+async function buscarCabecalho(pec: PecFlash, p: Periodo) {
   const { rows } = await inhausPool.query(
     `select * from public.ft_flash_semana where pec_cod=$1 and mes=$2::date and semana=$3`,
-    [pecCod, mesParaData(p.mes), p.semana],
+    [pec.pecCod, mesParaData(p.mes), p.semana],
   )
+  // Semana gravada sob outro CR (PEC que mudou de CR) nunca é exibida neste escopo.
+  if (rows[0] && rows[0].cr_cod !== pec.crCod) throw new ErroFlash("Semana pertence a outro CR.", 404)
   return rows[0] ?? null
 }
 
@@ -296,8 +300,8 @@ async function realizadoUltimoMes(pec: PecFlash): Promise<{ mes: string; rol: nu
 export async function abrirSemana(escopo: EscopoDados, pecCod: string, periodo: Periodo): Promise<SemanaCompleta> {
   const pec = await garantirPecNoEscopo(escopo, pecCod)
   const itens = await listarItens(escopo, pecCod)
-  const anterior = await ultimaEnviadaAntes(pecCod, periodo)
-  let s = await buscarCabecalho(pecCod, periodo)
+  const anterior = await ultimaEnviadaAntes(pec, periodo)
+  let s = await buscarCabecalho(pec, periodo)
 
   if (!s) {
     const aliquota = await aliquotaDoPec(pecCod, pec.crCod)
@@ -329,9 +333,10 @@ export async function abrirSemana(escopo: EscopoDados, pecCod: string, periodo: 
     } finally {
       c.release()
     }
-    s = await buscarCabecalho(pecCod, periodo)
-  } else if (s.status !== "ENVIADO") {
-    // Rascunho aberto acompanha a parametrização: item novo entra com a qtd. padrão; desativado sai.
+    s = await buscarCabecalho(pec, periodo)
+  } else if (s.status === "RASCUNHO") {
+    // Rascunho acompanha a parametrização: item novo entra com a qtd. padrão; desativado sai.
+    // Semana REABERTA mantém a composição e os valores da época do envio.
     const c = await inhausPool.connect()
     try {
       await c.query("begin")
@@ -355,7 +360,7 @@ export async function abrirSemana(escopo: EscopoDados, pecCod: string, periodo: 
     } finally {
       c.release()
     }
-    s = await buscarCabecalho(pecCod, periodo)
+    s = await buscarCabecalho(pec, periodo)
   }
 
   return {
@@ -382,7 +387,9 @@ async function gravarQuantidades(
   semana: SemanaCompleta,
   entrada: z.infer<typeof rascunhoSchema>,
 ): Promise<void> {
-  if (semana.status === "ENVIADO") {
+  // Relê o status COM trava de linha dentro da transação: um envio concorrente não pode ser sobrescrito.
+  const atual = await c.query(`select status from public.ft_flash_semana where id=$1 for update`, [semana.id])
+  if (semana.status === "ENVIADO" || atual.rows[0]?.status === "ENVIADO") {
     throw new ErroFlash("Semana já enviada. Peça ao financeiro para reabrir.", 409)
   }
   const naSemana = new Set(semana.linhas.map((l) => l.itemId))
@@ -437,7 +444,7 @@ export async function enviarSemana(
   await emTransacao(async (c) => {
     await gravarQuantidades(c, semana, entrada)
     await c.query(
-      `update public.ft_flash_semana set status='ENVIADO', enviado_por=$1, enviado_em=now() where id=$2`,
+      `update public.ft_flash_semana set status='ENVIADO', enviado_por=$1, enviado_em=now() where id=$2 and status <> 'ENVIADO'`,
       [usuario, semana.id],
     )
     await c.query(
@@ -456,10 +463,15 @@ export async function reabrirSemana(
   usuario: string,
 ): Promise<void> {
   const pec = await garantirPecNoEscopo(escopo, pecCod)
-  const s = await buscarCabecalho(pecCod, periodo)
-  if (!s || s.status !== "ENVIADO") throw new ErroFlash("Só é possível reabrir uma semana enviada.", 409)
+  const s = await buscarCabecalho(pec, periodo)
+  if (!s) throw new ErroFlash("Só é possível reabrir uma semana enviada.", 409)
   await emTransacao(async (c) => {
-    await c.query(`update public.ft_flash_semana set status='REABERTO', atualizado_em=now() where id=$1`, [s.id])
+    // Condicional no SQL: dois pedidos simultâneos geram UMA reabertura.
+    const r = await c.query(
+      `update public.ft_flash_semana set status='REABERTO', atualizado_em=now() where id=$1 and status='ENVIADO' returning id`,
+      [s.id],
+    )
+    if (!r.rows[0]) throw new ErroFlash("Só é possível reabrir uma semana enviada.", 409)
     await c.query(
       `insert into public.ft_flash_evento (semana_id, cr_cod, acao, usuario, motivo) values ($1,$2,'REABERTURA',$3,$4)`,
       [s.id, pec.crCod, usuario, motivo],
@@ -475,7 +487,7 @@ export async function consolidado(escopo: EscopoDados, mes: string): Promise<Lin
     `select p.pec_cod, p.pec_nome, p.cr_cod, p.gerente, s.semana, s.status,
             s.receita_bruta::float8 as bruta, s.receita_liquida::float8 as liquida
        from public.dm_flash_pec p
-       left join public.ft_flash_semana s on s.pec_cod = p.pec_cod and s.mes = $1::date
+       left join public.ft_flash_semana s on s.pec_cod = p.pec_cod and s.cr_cod = p.cr_cod and s.mes = $1::date
       where p.ativo${fp.sql}
       order by p.gerente nulls last, p.pec_cod, s.semana`,
     [mesParaData(mes), ...fp.params],

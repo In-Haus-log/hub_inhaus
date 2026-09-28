@@ -13,7 +13,7 @@ export function FlashInfo() {
           <li><strong>Receita bruta</strong> = soma de todos os itens.</li>
           <li><strong>Receita líquida</strong> = bruta menos impostos, pelo % médio que o contrato pagou nos <strong>últimos 3 meses</strong>. Ex.: R$ 1.000.000 com 11,5% → <strong>R$ 885.000</strong>. Contrato novo usa 14,25%.</li>
           <li>A semana <strong>começa igual à última enviada</strong>: mude só o que mudou (◆ marca a alteração).</li>
-          <li>Depois de <strong>enviada</strong>, a semana trava. Só o financeiro reabre, informando o motivo.</li>
+          <li>Depois de <strong>enviada</strong>, a semana trava. Só o financeiro reabre, informando o motivo; a semana reaberta mantém os itens e valores da época — corrige-se só a quantidade.</li>
           <li>Mudou a tarifa? Vale <strong>da semana atual em diante</strong>; semanas enviadas não mudam.</li>
         </ul>
       </div>

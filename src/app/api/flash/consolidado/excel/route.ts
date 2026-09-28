@@ -4,7 +4,7 @@ import { erroZod, responderErro } from "@/app/api/flash/_resposta"
 import { guardaFlash } from "@/lib/flash/acesso"
 import { consolidado } from "@/lib/flash/dados"
 import { gerarExcelConsolidado } from "@/lib/flash/excel"
-import { periodoSchema } from "@/lib/flash/validacao"
+import { mesSchema } from "@/lib/flash/validacao"
 
 export const dynamic = "force-dynamic"
 
@@ -13,7 +13,7 @@ const SIGLAS = ["JAN", "FEV", "MAR", "ABR", "MAI", "JUN", "JUL", "AGO", "SET", "
 // GET ?mes=YYYY-MM — Excel do consolidado no layout da guia "Flash Report".
 export async function GET(req: Request) {
   const g = await guardaFlash({ consolidado: true }); if (!g.ok) return g.response
-  const m = periodoSchema.pick({ mes: true }).safeParse({ mes: new URL(req.url).searchParams.get("mes") })
+  const m = mesSchema.safeParse({ mes: new URL(req.url).searchParams.get("mes") })
   if (!m.success) return erroZod(m.error)
   try {
     const linhas = await consolidado(g.escopo, m.data.mes)
