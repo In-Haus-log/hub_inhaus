@@ -20,7 +20,7 @@ Excel idêntico ao atual para o corporativo.
 **Fase 1 (este spec):** somente **receita** (bruta e líquida).
 
 **Fora de escopo:** custos (folha, benefícios, glosas — virão de relatórios do portal da
-empresa), margem, aprovação em duas etapas, prazo de envio, uso em celular.
+empresa), margem, importação de BM ou de histórico da planilha, aprovação em duas etapas, prazo de envio, uso em celular.
 
 **Pendências a decidir pelo usuário (não bloqueiam a fase 1):**
 1. Regra definitiva de contagem das semanas do mês.
@@ -104,14 +104,7 @@ números tabulares alinhados à direita; verde/vermelho só na variação. AA e 
 
 Todas com `cr_cod` para passar pelas duas travas de isolamento.
 
-## 6. Importação de apoio
-
-- Importar parametrização a partir do Excel do BM de um contrato (ex.: BM Basf maio/2026:
-  aba "BM", colunas descrição / unidade / tarifa / qtd., blocos por área) — gestor revisa
-  antes de gravar.
-- Importar histórico das semanas da planilha Flash Report (opcional, após a fase 1).
-
-## 7. Testes e verificação
+## 6. Testes e verificação
 
 - Unitários do cálculo (tipos, desconto negativo, cópia da semana, vigência de tarifa,
   % impostos com e sem histórico).
