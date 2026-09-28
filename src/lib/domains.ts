@@ -21,6 +21,8 @@ import {
   Users,
   UsersRound,
   Wallet,
+  CalendarCheck,
+  Sheet,
   type LucideIcon,
 } from "lucide-react"
 
@@ -232,6 +234,20 @@ export const DOMINIOS: Dominio[] = [
         href: "/dashboards/financeiro/projecoes",
         palavrasChave: ["realizado", "orcado", "orçado", "dre", "resultado", "margem", "rol", "mc", "re x ro"],
         icone: BarChart3,
+      },
+      {
+        key: "flash-report",
+        label: "Flash Report",
+        href: "/dashboards/financeiro/flash-report",
+        palavrasChave: ["flash", "projecao", "projeção", "semana", "receita", "pec", "parametrizacao"],
+        icone: CalendarCheck,
+      },
+      {
+        key: "flash-report-consolidado",
+        label: "Flash Report · Consolidado",
+        href: "/dashboards/financeiro/flash-report/consolidado",
+        palavrasChave: ["flash", "consolidado", "envios", "pendentes", "excel", "corporativo"],
+        icone: Sheet,
       },
       {
         key: "custo-pessoal",
