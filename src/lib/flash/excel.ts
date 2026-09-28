@@ -3,7 +3,10 @@ import ExcelJS from "exceljs"
 import type { LinhaConsolidado } from "./dados"
 import { semanasDoMes } from "./semanas"
 
-/** Excel do consolidado no layout da guia "Flash Report" enviada ao corporativo. Fase 1: MC e % vazios. */
+/**
+ * Excel do consolidado no layout da guia "Flash Report" enviada ao corporativo.
+ * Só semanas ENVIADAS entram. Fase 1: MC e % vazios.
+ */
 const MESES = ["JANEIRO","FEVEREIRO","MARÇO","ABRIL","MAIO","JUNHO","JULHO","AGOSTO","SETEMBRO","OUTUBRO","NOVEMBRO","DEZEMBRO"]
 const COL_INICIO = 10 // J
 const FORMATO = "#,##0.00"
@@ -32,7 +35,9 @@ export async function gerarExcelConsolidado(mes: string, linhas: LinhaConsolidad
     const fixos = [`${l.pec.pecCod}${l.pec.gerente ?? ""}`, l.pec.pecCod, l.negocio, l.situacao, null, l.gerenteRegional, l.pec.gerente, l.pec.pecNome]
     fixos.forEach((v, j) => (ws.getCell(r, j + 1).value = v ?? null))
     blocos.forEach((b, k) => {
-      const v = b.n === 0 ? l.realizadoRol : l.semanas[b.n]?.receitaLiquida
+      // Só semanas ENVIADAS vão ao corporativo; rascunho/reaberta sai vazia.
+      const s = l.semanas[b.n]
+      const v = b.n === 0 ? l.realizadoRol : s?.status === "ENVIADO" ? s.receitaLiquida : null
       const cel = ws.getCell(r, COL_INICIO + k * 3)
       cel.value = v ?? null
       cel.numFmt = FORMATO

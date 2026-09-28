@@ -67,7 +67,6 @@ export function GradeLancamento({ semana, url }: { semana: SemanaCompleta; url: 
   const [confirmando, setConfirmando] = useState(false)
   const [enviando, setEnviando] = useState(false)
   const inputs = useRef(new Map<number, HTMLInputElement>())
-  const primeiraRenderizacao = useRef(true)
 
   const valorUnit = useMemo(() => new Map(semana.linhas.map((l) => [l.itemId, l.valorUnitario])), [semana.linhas])
   const anterior = useMemo(
@@ -113,18 +112,19 @@ export function GradeLancamento({ semana, url }: { semana: SemanaCompleta; url: 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Salvamento automático (debounce). Não salva na 1ª renderização nem com campo inválido.
+  // Salvamento automático (debounce). Só salva o que mudou desde o último envio ao servidor
+  // e nunca com campo inválido.
+  const ultimoSalvo = useRef<string | null>(null)
   useEffect(() => {
-    if (primeiraRenderizacao.current) {
-      primeiraRenderizacao.current = false
-      return
-    }
-    if (travada || invalidos.size > 0) return
+    const atual = corpo()
+    if (ultimoSalvo.current === null) ultimoSalvo.current = atual
+    if (travada || invalidos.size > 0 || atual === ultimoSalvo.current) return
     setEstado("salvando")
     const t = setTimeout(async () => {
       try {
-        const r = await fetch(url, { method: "PUT", headers: { "Content-Type": "application/json" }, body: corpo() })
+        const r = await fetch(url, { method: "PUT", headers: { "Content-Type": "application/json" }, body: atual })
         if (r.ok) {
+          ultimoSalvo.current = atual
           setEstado("salvo")
           setErro(null)
           router.refresh() // atualiza os indicadores do topo com o rascunho salvo

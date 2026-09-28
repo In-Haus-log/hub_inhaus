@@ -4,7 +4,7 @@ import { gerarExcelConsolidado } from "./excel"
 
 const linha = {
   pec: { pecCod: "092454", pecNome: "092454 (SP) - BASF", crCod: "43409", gerente: "LUCAS" },
-  semanas: { 1: { status: "ENVIADO", receitaBruta: 1000, receitaLiquida: 885 }, 2: undefined },
+  semanas: { 1: { status: "ENVIADO", receitaBruta: 1000, receitaLiquida: 885 }, 2: undefined, 3: { status: "RASCUNHO", receitaBruta: 50, receitaLiquida: 44 } },
   realizadoRol: 900, negocio: "DIRETO", gerenteRegional: "WESLEY", situacao: "ATIVO",
 }
 
@@ -20,6 +20,7 @@ describe("gerarExcelConsolidado", () => {
     expect(ws.getCell("B6").value).toBe("092454")
     expect(ws.getCell("J6").value).toBe(885)
     expect(ws.getCell("M6").value).toBeNull()              // semana 2 pendente
+    expect(ws.getCell("P6").value).toBeNull()              // semana 3 em rascunho não vai ao corporativo
     expect(ws.getCell("J4").value).toBe(885)               // total da coluna
     // setembro tem 5 semanas → REALIZADO começa na coluna J + 5×3 = Y
     expect(ws.getCell("Y3").value).toBe("REALIZADO")
