@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Check, ChevronDown, CloudOff, History, Loader2, Lock, Send } from "lucide-react"
 
-import { moeda } from "@/components/flash/moeda"
+import { moeda, percentual } from "@/components/flash/moeda"
 import {
   Dialog,
   DialogContent,
@@ -13,7 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { TIPOS, alteracoes, receitaBruta, receitaLiquida, valorLinha, type Item } from "@/lib/flash/calculos"
+import { TIPOS, alteracoes, resumoSemana, valorLinha, type Item } from "@/lib/flash/calculos"
 import type { SemanaCompleta } from "@/lib/flash/dados"
 import { formatarNumero } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -31,17 +31,17 @@ type Grupo = { chave: string; titulo: string; itens: Item[] }
 function agrupar(itens: Item[]): Grupo[] {
   const grupos = new Map<string, Grupo>()
   for (const i of itens) {
-    const chave = `${i.tipo}|${i.agrupador ?? ""}`
+    const chave = `${i.natureza}|${i.tipo}|${i.agrupador ?? ""}`
     if (!grupos.has(chave)) {
       grupos.set(chave, {
         chave,
-        titulo: [TIPOS[i.tipo].rotulo, i.agrupador].filter(Boolean).join(" · "),
+        titulo: [i.natureza === "CUSTO" ? "Custo" : null, TIPOS[i.tipo].rotulo, i.agrupador].filter(Boolean).join(" · "),
         itens: [],
       })
     }
     grupos.get(chave)!.itens.push(i)
   }
-  return [...grupos.values()]
+  return [...grupos.values()].sort((a, b) => Number(a.chave.startsWith("CUSTO")) - Number(b.chave.startsWith("CUSTO")))
 }
 
 const paraNumero = (txt: string) => {
@@ -91,8 +91,8 @@ export function GradeLancamento({ semana, url }: { semana: SemanaCompleta; url: 
     return s
   }, [qtd, itensDaSemana])
 
-  const bruta = receitaBruta(semana.itens, linhas)
-  const liquida = receitaLiquida(bruta, semana.aliquota)
+  const resumo = useMemo(() => resumoSemana(semana.itens, linhas, semana.aliquota), [semana.itens, semana.aliquota, linhas])
+  const { bruta, rol: liquida, custos, mc, margem } = resumo
   const mudancas = alteracoes(linhas, semana.anterior)
   const alterados = new Set(mudancas.map((m) => m.itemId))
   const nomeItem = new Map(semana.itens.map((i) => [i.id, i.descricao]))
@@ -312,8 +312,17 @@ export function GradeLancamento({ semana, url }: { semana: SemanaCompleta; url: 
             <span className="font-display text-lg font-semibold tabular-nums text-navy">{moeda(bruta, 2)}</span>
           </p>
           <p>
-            <span className="text-xs text-muted-foreground">Líquida </span>
+            <span className="text-xs text-muted-foreground">ROL </span>
             <span className="font-display text-lg font-semibold tabular-nums text-teal">{moeda(liquida, 2)}</span>
+          </p>
+          <p>
+            <span className="text-xs text-muted-foreground">Custos </span>
+            <span className="font-display text-lg font-semibold tabular-nums text-navy">{moeda(custos, 2)}</span>
+          </p>
+          <p>
+            <span className="text-xs text-muted-foreground">MC </span>
+            <span className={cn("font-display text-lg font-semibold tabular-nums", mc < 0 ? "text-red-700" : "text-navy")}>{moeda(mc, 2)}</span>
+            <span className="ml-1 text-xs text-muted-foreground">({percentual(margem)})</span>
           </p>
           <p className="text-xs text-muted-foreground">
             {mudancas.length === 0 ? "Sem alterações" : `${mudancas.length} ${mudancas.length === 1 ? "alteração" : "alterações"}`}
@@ -375,8 +384,8 @@ export function GradeLancamento({ semana, url }: { semana: SemanaCompleta; url: 
           <DialogHeader>
             <DialogTitle>Enviar a projeção da semana?</DialogTitle>
             <DialogDescription>
-              Depois de enviada, a semana fica travada. Receita líquida projetada:{" "}
-              <strong className="text-navy">{moeda(liquida, 2)}</strong>.
+              Depois de enviada, a semana fica travada. ROL projetado:{" "}
+              <strong className="text-navy">{moeda(liquida, 2)}</strong> · MC: <strong className="text-navy">{moeda(mc, 2)}</strong>.
             </DialogDescription>
           </DialogHeader>
           {mudancas.length > 0 ? (
