@@ -7,7 +7,6 @@ import { assertLinhasNoEscopo, predicadoSraCr, type EscopoDados } from "@/lib/se
 import {
   aliquotaDoHistorico,
   montarSemanaNova,
-  receitaBruta,
   receitaLiquida,
   valorLinha,
   type Item,
@@ -15,7 +14,7 @@ import {
   type TipoItem,
 } from "./calculos"
 import { mesParaData, periodoAnterior, type Periodo } from "./semanas"
-import { filtroCr } from "./sql"
+import { crNoEscopo, filtroCr } from "./sql"
 import { validarQuantidades, type itemSchema, type rascunhoSchema } from "./validacao"
 
 /**
@@ -75,9 +74,10 @@ const linhaParaItem = (r: any): Item => ({
   id: Number(r.id),
   descricao: r.descricao,
   tipo: r.tipo,
+  natureza: r.natureza,
+  crCod: r.cr_cod,
   valorUnitario: Number(r.valor_unitario),
   qtdPadrao: Number(r.qtd_padrao),
-  conta: r.conta,
   agrupador: r.agrupador,
   ordem: Number(r.ordem),
   ativo: r.ativo,
@@ -152,11 +152,12 @@ export async function listarMeusPecs(escopo: EscopoDados, periodo: Periodo): Pro
 // ---- Itens (parametrização) ----------------------------------------------------------
 
 export async function listarItens(escopo: EscopoDados, pecCod: string): Promise<Item[]> {
-  const pec = await garantirPecNoEscopo(escopo, pecCod)
-  const f = filtroCr(escopo, "i.cr_cod", 3)
+  await garantirPecNoEscopo(escopo, pecCod)
+  const f = filtroCr(escopo, "i.cr_cod", 2)
   const { rows } = await inhausPool.query(
-    `select * from public.dm_flash_item i where i.pec_cod = $1 and i.cr_cod = $2${f.sql} order by ativo desc, ordem, id`,
-    [pecCod, pec.crCod, ...f.params],
+    `select * from public.dm_flash_item i where i.pec_cod = $1${f.sql}
+      order by (i.natureza = 'CUSTO'), i.ativo desc, i.ordem, i.id`,
+    [pecCod, ...f.params],
   )
   assertLinhasNoEscopo(rows, (r) => r.cr_cod, escopo)
   return rows.map(linhaParaItem)
@@ -169,33 +170,37 @@ export async function salvarItem(
   id?: number,
 ): Promise<Item> {
   const pec = await garantirPecNoEscopo(escopo, pecCod)
-  const valores = [d.descricao, d.tipo, d.valorUnitario, d.qtdPadrao, d.conta, d.agrupador, d.ordem]
+  const crItem = d.crCod ?? pec.crCod
+  if (!crNoEscopo(escopo, crItem)) throw new ErroFlash("Este CR está fora do seu escopo.", 403)
+  const valores = [d.descricao, d.tipo, d.valorUnitario, d.qtdPadrao, d.agrupador, d.ordem, d.natureza, crItem]
   const c = await inhausPool.connect()
   try {
     await c.query("begin")
+    const f = filtroCr(escopo, "cr_cod", 11)
     const { rows } = id
       ? await c.query(
-          `update public.dm_flash_item set descricao=$1, tipo=$2, valor_unitario=$3, qtd_padrao=$4, conta=$5,
-                  agrupador=$6, ordem=$7, atualizado_em=now() where id=$8 and pec_cod=$9 returning *`,
-          [...valores, id, pecCod],
+          `update public.dm_flash_item set descricao=$1, tipo=$2, valor_unitario=$3, qtd_padrao=$4,
+                  agrupador=$5, ordem=$6, natureza=$7, cr_cod=$8, atualizado_em=now()
+            where id=$9 and pec_cod=$10${f.sql} returning *`,
+          [...valores, id, pecCod, ...f.params],
         )
       : await c.query(
-          `insert into public.dm_flash_item (descricao, tipo, valor_unitario, qtd_padrao, conta, agrupador, ordem, pec_cod, cr_cod)
+          `insert into public.dm_flash_item (descricao, tipo, valor_unitario, qtd_padrao, agrupador, ordem, natureza, cr_cod, pec_cod)
            values ($1,$2,$3,$4,$5,$6,$7,$8,$9) returning *`,
-          [...valores, pecCod, pec.crCod],
+          [...valores, pecCod],
         )
     if (!rows[0]) throw new ErroFlash("Item não encontrado.", 404)
-    // Tarifa nova vale da semana corrente em diante: recalcula só semanas NÃO enviadas.
+    // Mudança vale da semana corrente em diante: só semanas em RASCUNHO acompanham (valor, natureza e CR).
+    // Semana ENVIADA ou REABERTA mantém a foto da época.
     const afetadas = await c.query(
-      `update public.ft_flash_semana_item si set valor_unitario = $1,
+      `update public.ft_flash_semana_item si set valor_unitario = $1, natureza = $4::text, cr_cod = $5::text,
               total = round(($1 * si.quantidade * case when $3 = 'DESCONTO' then -1 else 1 end)::numeric, 2)
          from public.ft_flash_semana s
         where si.semana_id = s.id and si.item_id = $2 and s.status = 'RASCUNHO'
         returning s.id, s.aliquota`,
-      [d.valorUnitario, rows[0].id, d.tipo],
+      [d.valorUnitario, rows[0].id, d.tipo, d.natureza, crItem],
     )
-    const itens = (await c.query(`select * from public.dm_flash_item where pec_cod = $1`, [pecCod])).rows.map(linhaParaItem)
-    for (const s of afetadas.rows) await gravarTotais(c, Number(s.id), itens, Number(s.aliquota))
+    for (const s of afetadas.rows) await gravarTotais(c, Number(s.id), Number(s.aliquota))
     await c.query("commit")
     return linhaParaItem(rows[0])
   } catch (e) {
@@ -215,11 +220,16 @@ export async function definirAtivo(escopo: EscopoDados, pecCod: string, id: numb
   if (r.rowCount === 0) throw new ErroFlash("Item não encontrado.", 404)
 }
 
-export async function contasDre(): Promise<{ conta: string; nome: string; grupo: string | null }[]> {
+/** CRs que o usuário pode escolher para um item (todos, ou só os do escopo). */
+export async function crsDoEscopo(escopo: EscopoDados): Promise<{ cr: string; nome: string }[]> {
+  const f = filtroCr(escopo, "c.cr", 1)
   const { rows } = await inhausPool.query(
-    `select conta_mae, nome, grupo2 from public.dm_conta where ativo order by (conta_mae like '311%') desc, ordem`,
+    `select c.cr, coalesce(nullif(c.descri_cr, ''), nullif(c.nome_cliente, ''), c.cr) as nome
+       from public.dm_cr c where true${f.sql} order by c.cr`,
+    f.params,
   )
-  return rows.map((r) => ({ conta: r.conta_mae, nome: r.nome, grupo: r.grupo2 }))
+  assertLinhasNoEscopo(rows, (r) => r.cr, escopo)
+  return rows.map((r) => ({ cr: r.cr, nome: r.nome }))
 }
 
 // ---- Semana ----------------------------------------------------------------------------
@@ -265,8 +275,14 @@ async function ultimaEnviadaAntes(
   return { linhas: await linhasDaSemana(inhausPool, Number(rows[0].id)), liquida: rows[0].liquida }
 }
 
-async function gravarTotais(c: Executor, id: number, itens: Item[], aliquota: number): Promise<void> {
-  const bruta = receitaBruta(itens, await linhasDaSemana(c, id))
+/** Receita bruta = soma dos totais já gravados das linhas de RECEITA; custos não entram no ROL. */
+async function gravarTotais(c: Executor, id: number, aliquota: number): Promise<void> {
+  const { rows } = await c.query(
+    `select coalesce(sum(total), 0)::float8 as bruta from public.ft_flash_semana_item
+      where semana_id = $1 and natureza = 'RECEITA'`,
+    [id],
+  )
+  const bruta = Math.round(rows[0].bruta * 100) / 100
   await c.query(
     `update public.ft_flash_semana set receita_bruta=$1, aliquota=$2, receita_liquida=$3, atualizado_em=now() where id=$4`,
     [bruta, aliquota, receitaLiquida(bruta, aliquota), id],
@@ -306,7 +322,7 @@ export async function abrirSemana(escopo: EscopoDados, pecCod: string, periodo: 
   if (!s) {
     const aliquota = await aliquotaDoPec(pecCod, pec.crCod)
     const linhas = montarSemanaNova(itens, anterior?.linhas ?? null)
-    const tipo = new Map(itens.map((i) => [i.id, i.tipo]))
+    const porId = new Map(itens.map((i) => [i.id, i]))
     const c = await inhausPool.connect()
     try {
       await c.query("begin")
@@ -318,13 +334,14 @@ export async function abrirSemana(escopo: EscopoDados, pecCod: string, periodo: 
       if (ins.rows[0]) {
         const id = Number(ins.rows[0].id)
         for (const l of linhas) {
+          const it = porId.get(l.itemId)!
           await c.query(
-            `insert into public.ft_flash_semana_item (semana_id, item_id, cr_cod, valor_unitario, quantidade, total)
-             values ($1,$2,$3,$4,$5,$6)`,
-            [id, l.itemId, pec.crCod, l.valorUnitario, l.quantidade, valorLinha(tipo.get(l.itemId)!, l.valorUnitario, l.quantidade)],
+            `insert into public.ft_flash_semana_item (semana_id, item_id, cr_cod, natureza, valor_unitario, quantidade, total)
+             values ($1,$2,$3,$4,$5,$6,$7)`,
+            [id, l.itemId, it.crCod, it.natureza, l.valorUnitario, l.quantidade, valorLinha(it.tipo, l.valorUnitario, l.quantidade)],
           )
         }
-        await gravarTotais(c, id, itens, aliquota)
+        await gravarTotais(c, id, aliquota)
       }
       await c.query("commit")
     } catch (e) {
@@ -342,9 +359,9 @@ export async function abrirSemana(escopo: EscopoDados, pecCod: string, periodo: 
       await c.query("begin")
       for (const i of itens.filter((i) => i.ativo)) {
         await c.query(
-          `insert into public.ft_flash_semana_item (semana_id, item_id, cr_cod, valor_unitario, quantidade, total)
-           values ($1,$2,$3,$4,$5,$6) on conflict do nothing`,
-          [s.id, i.id, pec.crCod, i.valorUnitario, i.qtdPadrao, valorLinha(i.tipo, i.valorUnitario, i.qtdPadrao)],
+          `insert into public.ft_flash_semana_item (semana_id, item_id, cr_cod, natureza, valor_unitario, quantidade, total)
+           values ($1,$2,$3,$4,$5,$6,$7) on conflict do nothing`,
+          [s.id, i.id, i.crCod, i.natureza, i.valorUnitario, i.qtdPadrao, valorLinha(i.tipo, i.valorUnitario, i.qtdPadrao)],
         )
       }
       await c.query(
@@ -352,7 +369,7 @@ export async function abrirSemana(escopo: EscopoDados, pecCod: string, periodo: 
           where si.semana_id=$1 and si.item_id=i.id and not i.ativo`,
         [s.id],
       )
-      await gravarTotais(c, Number(s.id), itens, Number(s.aliquota))
+      await gravarTotais(c, Number(s.id), Number(s.aliquota))
       await c.query("commit")
     } catch (e) {
       await c.query("rollback")
@@ -405,7 +422,7 @@ async function gravarQuantidades(
     )
   }
   await c.query(`update public.ft_flash_semana set comentario=$1 where id=$2`, [entrada.comentario, semana.id])
-  await gravarTotais(c, semana.id, semana.itens, semana.aliquota)
+  await gravarTotais(c, semana.id, semana.aliquota)
 }
 
 async function emTransacao(fn: (c: PoolClient) => Promise<void>): Promise<void> {
