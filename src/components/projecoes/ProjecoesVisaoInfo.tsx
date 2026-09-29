@@ -17,7 +17,7 @@ export function ProjecoesVisaoInfo() {
         <p className="rounded-xl bg-navy-mist p-3">
           <strong>Exemplo:</strong> ROL R$ 900.000 e custos R$ 120.000 → <strong>MC R$ 780.000</strong>. Margem = 780.000 ÷ 900.000 = <strong>86,7%</strong>.
         </p>
-        <p className="text-xs text-muted-foreground">Impostos e benefícios entram numa próxima etapa. Cada pessoa vê apenas os CRs da própria carteira.</p>
+        <p className="text-xs text-muted-foreground">Os impostos já estão descontados no ROL. Impostos e benefícios como custo do contrato (que reduziriam o MC) entram numa próxima etapa. Cada pessoa vê apenas os CRs da própria carteira.</p>
       </div>
     </InfoIndicador>
   )

@@ -19,7 +19,7 @@ export function ParametrizacaoInfo() {
           <li>Mudou um valor? Vale <strong>da semana atual em diante</strong>; semanas já enviadas não mudam.</li>
           <li>Desativar um item o tira das próximas semanas, sem apagar o histórico.</li>
         </ul>
-        <p className="text-xs text-muted-foreground">Impostos e benefícios entram numa próxima etapa.</p>
+        <p className="text-xs text-muted-foreground">Impostos e benefícios como custo do contrato entram numa próxima etapa; os impostos sobre a receita já são descontados no ROL.</p>
       </div>
     </InfoIndicador>
   )
