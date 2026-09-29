@@ -9,6 +9,7 @@ import { ParametrizacaoPec } from "@/components/projecoes/ParametrizacaoPec"
 import { assertTelaVisivel } from "@/lib/dashboard-acesso"
 import { escopoDaPagina, TELA_FLASH } from "@/lib/flash/acesso"
 import { crsDoEscopo, ErroFlash, garantirPecNoEscopo, listarItens } from "@/lib/flash/dados"
+import { valorLinha, type Natureza } from "@/lib/flash/calculos"
 import { tituloNome } from "@/lib/nomes"
 
 export const metadata: Metadata = { title: "Projeções · Parametrização do PEC" }
@@ -38,8 +39,9 @@ export default async function ParametrizacaoPecPage({
   const voltar = `/dashboards/financeiro/projecoes${mes && semana ? `?mes=${encodeURIComponent(mes)}&semana=${encodeURIComponent(semana)}` : ""}`
   const lancar = `/dashboards/financeiro/flash-report/${pec.pecCod}${mes && semana ? `?mes=${encodeURIComponent(mes)}&semana=${encodeURIComponent(semana)}` : ""}`
   const ativos = itens.filter((i) => i.ativo)
-  const receitaMes = ativos.filter((i) => i.natureza === "RECEITA").reduce((s, i) => s + (i.tipo === "DESCONTO" ? -1 : 1) * i.valorUnitario * i.qtdPadrao, 0)
-  const custoMes = ativos.filter((i) => i.natureza === "CUSTO").reduce((s, i) => s + i.valorUnitario * i.qtdPadrao, 0)
+  const somaMes = (natureza: Natureza) => ativos.filter((i) => i.natureza === natureza).reduce((s, i) => s + valorLinha(i.tipo, i.valorUnitario, i.qtdPadrao), 0)
+  const receitaMes = somaMes("RECEITA")
+  const custoMes = somaMes("CUSTO")
 
   return (
     <div className="space-y-6">
