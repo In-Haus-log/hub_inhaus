@@ -230,9 +230,9 @@ export const DOMINIOS: Dominio[] = [
       },
       {
         key: "projecoes-analise",
-        label: "RE x OR",
+        label: "Projeções",
         href: "/dashboards/financeiro/projecoes",
-        palavrasChave: ["realizado", "orcado", "orçado", "dre", "resultado", "margem", "rol", "mc", "re x ro"],
+        palavrasChave: ["projecao", "projeção", "pec", "contrato", "rol", "mc", "margem", "parametrizacao", "parametrização"],
         icone: BarChart3,
       },
       {
