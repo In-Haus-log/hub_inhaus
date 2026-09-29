@@ -154,7 +154,7 @@ trabalha no módulo. **Leia a skill antes de mexer no módulo.**
 - **Clientes / Desvios (Atlas) + portal do cliente** → `modulo-desvios`.
 - **Treinamentos + Controle de Capacitação** (`/t/[token]`) → `modulo-treinamentos`.
 - **Portal Enjoei** (CR 68732) → `portal-enjoei`.
-- **RE x OR** (Financeiro; Realizado × Orçado do relatório RE x RO, `src/lib/projecoes`) → `modulo-projecoes`.
+- **Projeções** (Financeiro; visão de PECs com ROL, MC e % Margem + parametrização do PEC; a tabela RE x OR ficou em /projecoes/re-x-or, fora do menu) → `modulo-projecoes`.
 - **Flash Report** (Financeiro; projeção semanal de receita por PEC, `src/lib/flash`) → `modulo-flash-report`.
 
 Invariantes que valem sempre (não dependem da skill estar carregada):

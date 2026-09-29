@@ -11,13 +11,14 @@ Plano: `docs/superpowers/plans/2026-09-27-flash-report.md`
 ## Ideia
 O gestor parametriza **uma vez** os itens cobrados de cada PEC e, **toda semana**, ajusta só o que
 mudou. Cada semana (1 a 5 do mês) projeta o **mês inteiro**. O financeiro acompanha os envios,
-reabre quando preciso e exporta o Excel para o corporativo. **Fase 1 = só receita** (custos/MC depois).
+reabre quando preciso e exporta o Excel para o corporativo. Itens têm **natureza** RECEITA ou CUSTO; a grade mostra ROL, custos, MC e % Margem (impostos e benefícios como custo do contrato: fora do escopo por ora).
 
 ## Telas (registradas em `src/lib/domains.ts`)
 - `flash-report` → `/dashboards/financeiro/flash-report` — Meus PECs (cartões) + adicionar PEC.
 - `/dashboards/financeiro/flash-report/[pec]?mes=&semana=&aba=lancamento|parametrizacao` — KPIs,
   seletor de semana, `GradeLancamento` (Enter desce, autosave 800 ms, envio com resumo de→para) e
-  `Parametrizacao` (5 tipos, conta do DRE via Combobox, área opcional).
+  parametrização — **a aba antiga `?aba=parametrizacao` redireciona** para `/dashboards/financeiro/projecoes/[pec]`
+  (`ParametrizacaoPec`, ver `modulo-projecoes`). A grade tem grupos de custo e barra ROL/Custos/MC/%.
 - `flash-report-consolidado` → `/dashboards/financeiro/flash-report/consolidado?mes=` — painel de
   envios da semana, tabela gerente → PEC × semanas + realizado, reabrir (motivo), Exportar Excel.
 - Info (`src/components/flash/FlashInfo.tsx`) em todas as telas — sincronizar com `calculos.ts`.
@@ -31,14 +32,15 @@ reabre quando preciso e exporta o Excel para o corporativo. **Fase 1 = só recei
 - `excel.ts` — .xlsx (exceljs) no layout da guia "Flash Report"; **só semanas ENVIADAS**; MC/% vazios.
 - `acesso.ts` — `guardaFlash({consolidado})`; reabrir e Excel exigem a tela de consolidado.
 
-## Tabelas (`prisma/sql/015_flash_report.sql`, nunca `db push`)
-`dm_flash_pec` (PEC habilitado, `cr_cod`), `dm_flash_item` (tipo PESSOAS|UNITARIO|HORA_EXTRA|DESCONTO|FIXO,
-valor, qtd padrão, `conta` = conta-mãe do `dm_conta`, agrupador), `ft_flash_semana` (mes+semana, status
+## Tabelas (`prisma/sql/015_flash_report.sql` e `016_projecoes_parametrizacao.sql`, nunca `db push`)
+`dm_flash_pec` (PEC habilitado, `cr_cod`), `dm_flash_item` (`natureza` RECEITA|CUSTO; tipo PESSOAS|UNITARIO|HORA_EXTRA|DESCONTO|FIXO + TAXA|VARIAVEL (só custo);
+valor, qtd padrão, `cr_cod` = CR do item, editável e validado no escopo (403 fora dele), `conta` **sem uso** (coluna nullable), agrupador), `ft_flash_semana` (mes+semana, status
 RASCUNHO|ENVIADO|REABERTO, totais, alíquota aplicada), `ft_flash_semana_item` (quantidade + valor
-unitário **congelado**), `ft_flash_evento` (ENVIO/REABERTURA, quem, motivo).
+unitário **congelado** + `natureza` **congelada**), `ft_flash_evento` (ENVIO/REABERTURA, quem, motivo).
 
 ## Regras de negócio
-- Item = valor unitário × quantidade; DESCONTO negativo. Bruta = Σ itens. Líquida = bruta × (1 − alíquota).
+- Item = valor unitário × quantidade; DESCONTO negativo. Bruta = Σ itens de **receita**.
+- `resumoSemana` (`calculos.ts`) devolve bruta, ROL, custos, MC (= ROL − custos) e % margem (`margemPct`, nulo se ROL = 0). `gravarTotais(c, id, aliquota)` grava só a **receita** (bruta/líquida); custos não entram nos totais gravados. `crsDoEscopo` lista os CRs que o usuário pode escolher por item. Líquida = bruta × (1 − alíquota).
 - Alíquota (provisória) = −impostos (31201) ÷ receita bruta (31101) do PEC nos últimos 3 meses do RE x OR; sem histórico → `ALIQUOTA_PADRAO` (14,25%).
 - Semana nova = cópia da última **ENVIADA**; itens novos com qtd padrão; desativados saem.
 - Tarifa alterada / item novo ou desativado afetam só semanas em RASCUNHO. REABERTO mantém composição e valores congelados.
@@ -50,4 +52,4 @@ unitário **congelado**), `ft_flash_evento` (ENVIO/REABERTURA, quem, motivo).
 1. Regra definitiva de contagem das semanas do mês.
 2. Prazo de envio (dia/hora).
 3. Percentuais fixos de impostos por PEC (substitui a média de 3 meses).
-Fase 2: custos (folha, benefícios, glosas) e MC/% — virão de relatórios do portal.
+Ainda fora: impostos e benefícios como custo do contrato (o ROL já desconta impostos pela alíquota histórica); folha e glosas virão de relatórios do portal.
