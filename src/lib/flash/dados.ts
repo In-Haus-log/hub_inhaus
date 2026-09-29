@@ -213,9 +213,11 @@ export async function salvarItem(
 
 export async function definirAtivo(escopo: EscopoDados, pecCod: string, id: number, ativo: boolean): Promise<void> {
   await garantirPecNoEscopo(escopo, pecCod)
+  // Trava 1: item de CR fora do escopo não é alterado (0 linhas => 404).
+  const f = filtroCr(escopo, "cr_cod", 4)
   const r = await inhausPool.query(
-    `update public.dm_flash_item set ativo=$1, atualizado_em=now() where id=$2 and pec_cod=$3`,
-    [ativo, id, pecCod],
+    `update public.dm_flash_item set ativo=$1, atualizado_em=now() where id=$2 and pec_cod=$3${f.sql}`,
+    [ativo, id, pecCod, ...f.params],
   )
   if (r.rowCount === 0) throw new ErroFlash("Item não encontrado.", 404)
 }
