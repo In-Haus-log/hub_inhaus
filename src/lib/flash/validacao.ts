@@ -1,19 +1,32 @@
 import { z } from "zod"
 
-import { TIPOS, type TipoItem } from "./calculos"
+import { TIPOS, TIPOS_POR_NATUREZA, type TipoItem } from "./calculos"
 import { semanasDoMes } from "./semanas"
 
 const numero = z.coerce.number({ invalid_type_error: "Informe um número" }).finite("Informe um número")
 
-export const itemSchema = z.object({
-  descricao: z.string().trim().min(1, "Descrição é obrigatória").max(120),
-  tipo: z.enum(["PESSOAS", "UNITARIO", "HORA_EXTRA", "DESCONTO", "FIXO"], { message: "Tipo inválido" }),
-  valorUnitario: numero.min(0, "Valor não pode ser negativo"),
-  qtdPadrao: numero.min(0, "Quantidade não pode ser negativa"),
-  conta: z.string().regex(/^\d{5}$/, "Escolha uma conta do plano do DRE"),
-  agrupador: z.string().trim().max(60).nullish().transform((v) => v || null),
-  ordem: z.coerce.number().int().default(0),
-})
+export const itemSchema = z
+  .object({
+    descricao: z.string().trim().min(1, "Descrição é obrigatória").max(120),
+    natureza: z.enum(["RECEITA", "CUSTO"], { message: "Natureza inválida" }).default("RECEITA"),
+    tipo: z.enum(["PESSOAS", "UNITARIO", "HORA_EXTRA", "DESCONTO", "FIXO", "TAXA", "VARIAVEL"], { message: "Tipo inválido" }),
+    valorUnitario: numero.min(0, "Valor não pode ser negativo"),
+    qtdPadrao: numero.min(0, "Quantidade não pode ser negativa"),
+    crCod: z
+      .string()
+      .trim()
+      .toUpperCase()
+      .regex(/^[A-Z0-9]{5}$/, "CR inválido: use os 5 caracteres do CR")
+      .nullish()
+      .or(z.literal(""))
+      .transform((v) => v || null),
+    agrupador: z.string().trim().max(60).nullish().transform((v) => v || null),
+    ordem: z.coerce.number().int().default(0),
+  })
+  .refine((d) => TIPOS_POR_NATUREZA[d.natureza].includes(d.tipo), {
+    message: "Este tipo não existe para a natureza escolhida.",
+    path: ["tipo"],
+  })
 
 export const rascunhoSchema = z.object({
   linhas: z.array(z.object({

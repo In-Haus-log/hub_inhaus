@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest"
 import {
-  ALIQUOTA_PADRAO, aliquotaDoHistorico, alteracoes, montarSemanaNova, receitaBruta, receitaLiquida, valorLinha, type Item,
+  ALIQUOTA_PADRAO, aliquotaDoHistorico, alteracoes, margemPct, montarSemanaNova, receitaBruta, resumoSemana, TIPOS_POR_NATUREZA, receitaLiquida, valorLinha, type Item,
 } from "./calculos"
 
 const item = (p: Partial<Item> & { id: number }): Item => ({
-  descricao: "x", tipo: "PESSOAS", valorUnitario: 100, qtdPadrao: 1, conta: "31101",
+  descricao: "x", tipo: "PESSOAS", natureza: "RECEITA", crCod: "12345", valorUnitario: 100, qtdPadrao: 1,
   agrupador: null, ordem: 0, ativo: true, ...p,
 })
 
@@ -60,4 +60,38 @@ describe("alteracoes", () => {
     expect(alteracoes(atual, ant)).toEqual([{ itemId: 1, de: 15, para: 13 }, { itemId: 3, de: 0, para: 2 }])
   })
   it("sem semana anterior não há alterações", () => expect(alteracoes([{ itemId: 1, valorUnitario: 1, quantidade: 3 }], null)).toEqual([]))
+})
+
+describe("custo e margem", () => {
+  const itens = [
+    item({ id: 1, natureza: "RECEITA", tipo: "PESSOAS", valorUnitario: 1000 }),
+    item({ id: 2, natureza: "CUSTO", tipo: "HORA_EXTRA", valorUnitario: 50 }),
+    item({ id: 3, natureza: "CUSTO", tipo: "TAXA", valorUnitario: 200 }),
+  ]
+  const linhas = [
+    { itemId: 1, valorUnitario: 1000, quantidade: 10 }, // 10.000 de receita
+    { itemId: 2, valorUnitario: 50, quantidade: 20 },   // 1.000 de custo
+    { itemId: 3, valorUnitario: 200, quantidade: 1 },   //   200 de custo
+  ]
+  it("receitaBruta ignora itens de custo", () => expect(receitaBruta(itens, linhas)).toBe(10_000))
+  it("resumo: ROL = bruta × (1 − alíquota); MC = ROL − custos", () => {
+    const r = resumoSemana(itens, linhas, 0.1)
+    expect(r.bruta).toBe(10_000)
+    expect(r.rol).toBe(9_000)
+    expect(r.custos).toBe(1_200)
+    expect(r.mc).toBe(7_800)
+    expect(r.margem).toBeCloseTo(7_800 / 9_000)
+  })
+  it("linha de item desconhecido é ignorada", () => {
+    expect(resumoSemana(itens, [{ itemId: 99, valorUnitario: 5, quantidade: 5 }], 0.1).bruta).toBe(0)
+  })
+  it("margem é nula quando o ROL é zero (nunca NaN/Infinity)", () => {
+    expect(margemPct(-500, 0)).toBeNull()
+    expect(resumoSemana(itens, [{ itemId: 2, valorUnitario: 50, quantidade: 20 }], 0.1).margem).toBeNull()
+  })
+  it("desconto é receita negativa; custo nunca é DESCONTO", () => {
+    expect(TIPOS_POR_NATUREZA.CUSTO).not.toContain("DESCONTO")
+    expect(TIPOS_POR_NATUREZA.RECEITA).not.toContain("TAXA")
+    expect(TIPOS_POR_NATUREZA.CUSTO).toEqual(expect.arrayContaining(["HORA_EXTRA", "TAXA", "VARIAVEL"]))
+  })
 })

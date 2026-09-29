@@ -17,3 +17,9 @@ export function nomeDoPec(pecNome: string): string {
   const partes = semSituacao.split(" - ")
   return partes[partes.length - 1] ?? semSituacao
 }
+
+/** Percentual com 1 casa (0,132 → "13,2%"); vazio ("—") quando não há base. */
+export function percentual(v: number | null): string {
+  if (v == null || !Number.isFinite(v)) return "—"
+  return `${(v * 100).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`
+}
