@@ -40,7 +40,7 @@ export default async function PecFlashPage({
   const periodo: Periodo = lido.success && semanasDoMes(lido.data.mes).includes(lido.data.semana) ? lido.data : semanaDoMes(new Date())
   // A parametrização agora vive em Projeções; o endereço antigo da aba só redireciona.
   if (searchParams.aba === "parametrizacao") {
-    redirect(`/dashboards/financeiro/projecoes/${params.pec}?mes=${periodo.mes}&semana=${periodo.semana}`)
+    redirect(`/dashboards/financeiro/projecoes/${encodeURIComponent(params.pec)}?mes=${periodo.mes}&semana=${periodo.semana}`)
   }
   const base = `/dashboards/financeiro/flash-report/${params.pec}`
   const link = (p: Periodo) => `${base}?mes=${p.mes}&semana=${p.semana}`
@@ -65,8 +65,9 @@ export default async function PecFlashPage({
   }
   const urlParametrizacao = `/dashboards/financeiro/projecoes/${pec.pecCod}?mes=${periodo.mes}&semana=${periodo.semana}`
   const [ano, mesNum] = periodo.mes.split("-").map(Number)
-  const variacao = semana && semana.liquidaAnterior != null ? semana.receitaLiquida - semana.liquidaAnterior : null
   const r = semana ? resumoSemana(semana.itens, semana.linhas, semana.aliquota) : null
+  // Variação sobre o ROL do escopo do usuário (mesma base da grade e da semana anterior).
+  const variacao = semana && r && semana.liquidaAnterior != null ? r.rol - semana.liquidaAnterior : null
 
   return (
     <div className="space-y-6">

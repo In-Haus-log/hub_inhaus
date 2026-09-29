@@ -85,6 +85,15 @@ describe("custo e margem", () => {
   it("linha de item desconhecido é ignorada", () => {
     expect(resumoSemana(itens, [{ itemId: 99, valorUnitario: 5, quantidade: 5 }], 0.1).bruta).toBe(0)
   })
+  it("desconto reduz a bruta e nunca conta como custo", () => {
+    const it2 = [item({ id: 1, valorUnitario: 1000 }), item({ id: 2, tipo: "DESCONTO", valorUnitario: 100 })]
+    const r = resumoSemana(it2, [
+      { itemId: 1, valorUnitario: 1000, quantidade: 10 },
+      { itemId: 2, valorUnitario: 100, quantidade: 2 },
+    ], 0)
+    expect(r.bruta).toBe(9_800)
+    expect(r.custos).toBe(0)
+  })
   it("margem é nula quando o ROL é zero (nunca NaN/Infinity)", () => {
     expect(margemPct(-500, 0)).toBeNull()
     expect(resumoSemana(itens, [{ itemId: 2, valorUnitario: 50, quantidade: 20 }], 0.1).margem).toBeNull()

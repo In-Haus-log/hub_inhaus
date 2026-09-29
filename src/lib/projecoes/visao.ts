@@ -10,7 +10,8 @@ import type { LinhaPec } from "./agrupar"
  * TRAVA 1: `filtroCr` no PEC e em CADA soma de custo (o custo com CR fora do escopo não entra no MC do usuário).
  * TRAVA 2: `assertLinhasNoEscopo` na saída.
  * O cliente vem do registro mais recente do RE x OR do mesmo PEC e CR — a junção herda o filtro do PEC.
- * Regra: ROL vem do Flash (receita líquida); MC = ROL − custos (ver src/lib/flash/calculos.ts).
+ * Regra (escopada): ROL = receitas da semana com CR no escopo do usuário × (1 − alíquota da semana);
+ * custos = custos com CR no escopo; MC = ROL − custos (ver src/lib/flash/calculos.ts).
  */
 export async function listarVisao(escopo: EscopoDados, periodo: Periodo): Promise<LinhaPec[]> {
   const fp = filtroCr(escopo, "p.cr_cod", 3)
@@ -18,7 +19,9 @@ export async function listarVisao(escopo: EscopoDados, periodo: Periodo): Promis
   const { rows } = await inhausPool.query(
     `select p.pec_cod, p.pec_nome, p.cr_cod, p.gerente, cli.cliente,
             s.status,
-            case when s.id is null then null else s.receita_liquida::float8 end as rol,
+            case when s.id is null then null else
+              round(coalesce((select sum(si.total) from public.ft_flash_semana_item si
+                               where si.semana_id = s.id and si.natureza = 'RECEITA'${fi.sql}), 0) * (1 - s.aliquota), 2)::float8 end as rol,
             case when s.id is null then null else
               coalesce((select sum(si.total) from public.ft_flash_semana_item si
                          where si.semana_id = s.id and si.natureza = 'CUSTO'${fi.sql}), 0)::float8 end as custos

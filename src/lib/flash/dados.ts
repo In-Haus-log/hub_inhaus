@@ -125,10 +125,17 @@ export async function habilitarPec(escopo: EscopoDados, pecCod: string, usuario:
 export async function listarMeusPecs(escopo: EscopoDados, periodo: Periodo): Promise<ResumoPec[]> {
   const ant = periodoAnterior(periodo)
   const f = filtroCr(escopo, "p.cr_cod", 5)
+  const fi = filtroCr(escopo, "si.cr_cod", 5)
+  // Valores da semana só com as linhas de RECEITA de CR no escopo; ROL = bruta × (1 − alíquota da semana).
+  const brutaEscopo = (sem: string) =>
+    `coalesce((select sum(si.total) from public.ft_flash_semana_item si
+                where si.semana_id = ${sem}.id and si.natureza = 'RECEITA'${fi.sql}), 0)`
   const { rows } = await inhausPool.query(
     `select p.pec_cod, p.pec_nome, p.cr_cod, p.gerente,
-            s.status, coalesce(s.receita_bruta,0)::float8 as bruta, coalesce(s.receita_liquida,0)::float8 as liquida,
-            a.receita_liquida::float8 as liquida_ant
+            s.status, ${brutaEscopo("s")}::float8 as bruta,
+            round(${brutaEscopo("s")} * (1 - coalesce(s.aliquota, 0)), 2)::float8 as liquida,
+            case when a.id is null then null
+                 else round(${brutaEscopo("a")} * (1 - a.aliquota), 2)::float8 end as liquida_ant
        from public.dm_flash_pec p
        left join public.ft_flash_semana s on s.pec_cod = p.pec_cod and s.cr_cod = p.cr_cod and s.mes = $1::date and s.semana = $2
        left join public.ft_flash_semana a on a.pec_cod = p.pec_cod and a.cr_cod = p.cr_cod and a.mes = $3::date and a.semana = $4
@@ -248,13 +255,16 @@ async function aliquotaDoPec(pecCod: string, crCod: string): Promise<number> {
   return aliquotaDoHistorico(rows[0].bruta, rows[0].impostos)
 }
 
-async function linhasDaSemana(c: Executor, id: number): Promise<LinhaSemana[]> {
+/** Linhas da semana no escopo do usuário: linha de item de CR fora do escopo nunca sai daqui (Trava 1 e 2). */
+async function linhasDaSemana(c: Executor, id: number, escopo: EscopoDados): Promise<LinhaSemana[]> {
+  const f = filtroCr(escopo, "si.cr_cod", 2)
   const { rows } = await c.query(
-    `select si.item_id, si.valor_unitario, si.quantidade
+    `select si.item_id, si.valor_unitario, si.quantidade, si.cr_cod
        from public.ft_flash_semana_item si join public.dm_flash_item i on i.id = si.item_id
-      where si.semana_id = $1 order by i.ordem, i.id`,
-    [id],
+      where si.semana_id = $1${f.sql} order by i.ordem, i.id`,
+    [id, ...f.params],
   )
+  assertLinhasNoEscopo(rows, (r) => r.cr_cod, escopo)
   return rows.map((r) => ({
     itemId: Number(r.item_id),
     valorUnitario: Number(r.valor_unitario),
@@ -264,17 +274,26 @@ async function linhasDaSemana(c: Executor, id: number): Promise<LinhaSemana[]> {
 
 /** Última semana ENVIADA estritamente antes do período (para copiar e comparar). */
 async function ultimaEnviadaAntes(
+  escopo: EscopoDados,
   pec: PecFlash,
   p: Periodo,
 ): Promise<{ linhas: LinhaSemana[]; liquida: number } | null> {
+  // ROL comparável = receita das linhas NO ESCOPO × (1 − alíquota daquela semana); nunca o valor do contrato inteiro.
+  const f = filtroCr(escopo, "si.cr_cod", 5)
   const { rows } = await inhausPool.query(
-    `select id, receita_liquida::float8 as liquida from public.ft_flash_semana
-      where pec_cod=$1 and cr_cod=$4 and status='ENVIADO'
-        and (mes, semana) < ($2::date, $3::smallint) order by mes desc, semana desc limit 1`,
-    [pec.pecCod, mesParaData(p.mes), p.semana, pec.crCod],
+    `select s.id, s.aliquota::float8 as aliquota,
+            coalesce((select sum(si.total) from public.ft_flash_semana_item si
+                       where si.semana_id = s.id and si.natureza = 'RECEITA'${f.sql}), 0)::float8 as bruta
+       from public.ft_flash_semana s
+      where s.pec_cod=$1 and s.cr_cod=$4 and s.status='ENVIADO'
+        and (s.mes, s.semana) < ($2::date, $3::smallint) order by s.mes desc, s.semana desc limit 1`,
+    [pec.pecCod, mesParaData(p.mes), p.semana, pec.crCod, ...f.params],
   )
   if (!rows[0]) return null
-  return { linhas: await linhasDaSemana(inhausPool, Number(rows[0].id)), liquida: rows[0].liquida }
+  return {
+    linhas: await linhasDaSemana(inhausPool, Number(rows[0].id), escopo),
+    liquida: receitaLiquida(rows[0].bruta, rows[0].aliquota),
+  }
 }
 
 /** Receita bruta = soma dos totais já gravados das linhas de RECEITA; custos não entram no ROL. */
@@ -318,7 +337,7 @@ async function realizadoUltimoMes(pec: PecFlash): Promise<{ mes: string; rol: nu
 export async function abrirSemana(escopo: EscopoDados, pecCod: string, periodo: Periodo): Promise<SemanaCompleta> {
   const pec = await garantirPecNoEscopo(escopo, pecCod)
   const itens = await listarItens(escopo, pecCod)
-  const anterior = await ultimaEnviadaAntes(pec, periodo)
+  const anterior = await ultimaEnviadaAntes(escopo, pec, periodo)
   let s = await buscarCabecalho(pec, periodo)
 
   if (!s) {
@@ -392,7 +411,7 @@ export async function abrirSemana(escopo: EscopoDados, pecCod: string, periodo: 
     receitaBruta: Number(s.receita_bruta),
     receitaLiquida: Number(s.receita_liquida),
     itens,
-    linhas: await linhasDaSemana(inhausPool, Number(s.id)),
+    linhas: await linhasDaSemana(inhausPool, Number(s.id), escopo),
     anterior: anterior?.linhas ?? null,
     liquidaAnterior: anterior?.liquida ?? null,
     realizadoUltimoMes: await realizadoUltimoMes(pec),
