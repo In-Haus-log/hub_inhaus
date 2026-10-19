@@ -72,20 +72,6 @@ export type Dominio = {
 }
 
 export const DOMINIOS: Dominio[] = [
-{
-    key: "conformidade-legal",
-    label: "Horas Extras",
-    icone: ShieldCheck,
-    telas: [
-      {
-        key: "conformidade-legal",
-        label: "Conformidade legal",
-        href: "/dashboards/conformidade-legal",
-        palavrasChave: ["jornada", "interjornada", "ocorrencias", "folga", "ferias", "legal"],
-        icone: BarChart3,
-      },
-    ],
-  },
   {
     key: "conformidade-legal",
     label: "Horas Extras",
