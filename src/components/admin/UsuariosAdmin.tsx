@@ -17,9 +17,9 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
 import { SeletorTelas } from "@/components/admin/SeletorTelas"
-import { SeletorCrs } from "@/components/admin/SeletorCrs"
 import { ToastProvider, useToast } from "@/components/ui/toast"
 import { cn } from "@/lib/utils"
+import { idsContratantesSelecionados } from "@/lib/usuarios-permissoes-ui"
 
 type UsuarioAdmin = {
   authUserId: string | null
@@ -274,7 +274,7 @@ function FormularioCriar({
   const [isAnalista, setIsAnalista] = React.useState(false)
   const [seguranca, setSeguranca] = React.useState(false)
   const [telas, setTelas] = React.useState<string[]>([])
-  const [crs, setCrs] = React.useState<string[]>([])
+  const [contratantes, setContratantes] = React.useState<number[]>([])
   const [ehCliente, setEhCliente] = React.useState(false)
   const [ocupado, setOcupado] = React.useState(false)
 
@@ -303,7 +303,7 @@ function FormularioCriar({
           hasAccess: true,
           visibleScreens: telas,
           classificacao,
-          crs,
+          contratantes,
         }),
       })
       const d = await r.json()
@@ -336,26 +336,13 @@ function FormularioCriar({
         <Campo rotulo="Senha inicial">
           <Input value={senha} onChange={(e) => setSenha(e.target.value)} placeholder="Mínimo 8 caracteres" type="password" />
         </Campo>
-        <Campo rotulo="Telas visíveis">
-          <SeletorTelas value={telas} onChange={setTelas} />
-          <p className="mt-1.5 text-xs text-muted-foreground">Administradores veem todas as telas.</p>
+        <Campo rotulo="Classificação">
+          <select value={classificacao} onChange={(event) => setEhCliente(event.target.value === "CLIENTE")} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-navy outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <option value="INTERNO">Administrativo (Interno)</option>
+            <option value="CLIENTE">Cliente</option>
+          </select>
         </Campo>
-        <div className="mt-3 max-w-sm">
-          <label className="mb-1.5 block text-sm font-medium text-navy">CRs que pode ver (dados)</label>
-          <SeletorCrs value={crs} onChange={setCrs} />
-          <p className="mt-1.5 text-xs text-muted-foreground">
-            {isAdmin && !ehCliente
-              ? "Como administrador interno, este usuário vê os dados de todos os CRs."
-              : "Gerentes: vincule os CRs da carteira. Sem CR vinculado, os indicadores por CR ficam vazios."}{" "}
-            Esses CRs valem para TODOS os indicadores recortados por CR (ex.: RE x OR, Controle
-            de Quadro), não só para um indicador específico.
-          </p>
-        </div>
         <div className="flex flex-col justify-end gap-2">
-          <label className="flex items-center gap-2 text-sm text-navy">
-            <Checkbox checked={ehCliente} onCheckedChange={(v) => setEhCliente(!!v)} />
-            É cliente?
-          </label>
           <label
             className={cn("flex items-center gap-2 text-sm text-navy", ehCliente && "opacity-50")}
             title={ehCliente ? "Usuário CLIENTE não pode ser administrador" : undefined}
@@ -365,7 +352,7 @@ function FormularioCriar({
               disabled={ehCliente}
               onCheckedChange={(v) => setIsAdmin(!!v)}
             />
-            É administrador (vê tudo e gerencia usuários)
+            Administrador do hub (gerencia usuários)
           </label>
           <label className="flex items-center gap-2 text-sm text-navy">
             <Checkbox checked={isAnalista} onCheckedChange={(v) => setIsAnalista(!!v)} />
@@ -375,6 +362,12 @@ function FormularioCriar({
             <Checkbox checked={seguranca} onCheckedChange={(v) => setSeguranca(!!v)} />
             É Segurança (configura o EPI)
           </label>
+        </div>
+        <div className="col-span-full border-t border-navy/10 pt-4">
+          <h3 className="text-sm font-semibold text-navy">Permissões</h3>
+          <p className="mb-3 mt-1 text-xs text-muted-foreground">Administrador é um papel separado da classificação.</p>
+          <SeletorTelas value={telas} onChange={setTelas} contratantes={contratantes} onContratantesChange={setContratantes} />
+          {isAdmin && <p className="mt-2 text-xs text-muted-foreground">Administradores internos têm acesso a todas as telas.</p>}
         </div>
       </div>
       <div className="mt-5 flex items-center justify-end gap-2">
@@ -402,7 +395,10 @@ function EditorAcesso({
   const [isAnalista, setIsAnalista] = React.useState(usuario.isAnalista)
   const [seguranca, setSeguranca] = React.useState(usuario.ehSeguranca)
   const [telas, setTelas] = React.useState<string[]>(usuario.visibleScreens)
-  const [crs, setCrs] = React.useState<string[]>(usuario.crs)
+  const [contratantes, setContratantes] = React.useState<number[]>(() =>
+    idsContratantesSelecionados(usuario.contratantes, usuario.visibleScreens),
+  )
+  const [selecaoClientesAlterada, setSelecaoClientesAlterada] = React.useState(false)
   const [ehCliente, setEhCliente] = React.useState(usuario.classificacao === "CLIENTE")
   const [ocupado, setOcupado] = React.useState(false)
 
@@ -428,7 +424,9 @@ function EditorAcesso({
           seguranca,
           visibleScreens: telas,
           classificacao,
-          crs,
+          ...(selecaoClientesAlterada || contratantes.length > 0
+            ? { contratantes }
+            : {}),
         }),
       })
       const d = await r.json()
@@ -458,7 +456,7 @@ function EditorAcesso({
             disabled={ehEuMesmo || ehCliente}
             onCheckedChange={(v) => setIsAdmin(!!v)}
           />
-          Administrador
+          Administrador do hub
         </label>
         <label className="flex items-center gap-2 text-sm text-navy">
           <Checkbox checked={isAnalista} onCheckedChange={(v) => setIsAnalista(!!v)} />
@@ -475,31 +473,24 @@ function EditorAcesso({
           />
           Segurança (configura o EPI)
         </label>
-        <label className="flex items-center gap-2 text-sm text-navy">
-          <Checkbox checked={ehCliente} onCheckedChange={(v) => setEhCliente(!!v)} />
-          É cliente?
-        </label>
+        <Campo rotulo="Classificação">
+          <select value={classificacao} disabled={ehEuMesmo && isAdmin} onChange={(event) => setEhCliente(event.target.value === "CLIENTE")} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-navy outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60">
+            <option value="INTERNO">Administrativo (Interno)</option>
+            <option value="CLIENTE">Cliente</option>
+          </select>
+        </Campo>
         {ehEuMesmo && (
           <span className="text-xs text-muted-foreground">Você não pode revogar o próprio acesso/admin.</span>
         )}
       </div>
-      <div className="mt-3 max-w-sm">
-        <label className="mb-1.5 block text-sm font-medium text-navy">Telas visíveis</label>
-        <SeletorTelas value={telas} onChange={setTelas} />
-        {isAdmin && (
-          <p className="mt-1.5 text-xs text-muted-foreground">Como administrador, este usuário vê todas as telas.</p>
+      <div className="mt-4 border-t border-navy/10 pt-4">
+        <h3 className="text-sm font-semibold text-navy">Permissões</h3>
+        <p className="mb-3 mt-1 text-xs text-muted-foreground">Administrador é um papel separado da classificação.</p>
+        <SeletorTelas value={telas} onChange={setTelas} contratantes={contratantes} onContratantesChange={(next) => { setSelecaoClientesAlterada(true); setContratantes(next) }} />
+        {!selecaoClientesAlterada && contratantes.length === 0 && !usuario.visibleScreens.some((tela) => /^cliente-bi:[1-9]\d*$/.test(tela)) && (usuario.clientes.length > 0 || usuario.crs.length > 0) && (
+          <p className="mt-2 text-xs text-muted-foreground">Selecione clientes para atualizar os vínculos deste usuário.</p>
         )}
-      </div>
-      <div className="mt-3 max-w-sm">
-        <label className="mb-1.5 block text-sm font-medium text-navy">CRs que pode ver (dados)</label>
-        <SeletorCrs value={crs} onChange={setCrs} />
-        <p className="mt-1.5 text-xs text-muted-foreground">
-          {isAdmin && !ehCliente
-            ? "Como administrador interno, este usuário vê os dados de todos os CRs."
-            : "Gerentes: vincule os CRs da carteira. Sem CR vinculado, os indicadores por CR ficam vazios."}{" "}
-          Esses CRs valem para TODOS os indicadores recortados por CR (ex.: RE x OR, Controle de
-          Quadro), não só para um indicador específico.
-        </p>
+        {isAdmin && <p className="mt-2 text-xs text-muted-foreground">Administradores internos têm acesso a todas as telas.</p>}
       </div>
       <div className="mt-4 flex items-center justify-end">
         <Button type="button" variant="gradient" size="sm" onClick={salvar} disabled={ocupado}>
@@ -512,9 +503,9 @@ function EditorAcesso({
 
 function Campo({ rotulo, children }: { rotulo: string; children: React.ReactNode }) {
   return (
-    <div>
-      <label className="mb-1.5 block text-sm font-medium text-navy">{rotulo}</label>
+    <label className="block">
+      <span className="mb-1.5 block text-sm font-medium text-navy">{rotulo}</span>
       {children}
-    </div>
+    </label>
   )
 }

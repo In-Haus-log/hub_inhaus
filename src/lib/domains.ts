@@ -392,7 +392,7 @@ export type TelaComDominio = Tela & {
 /** A Home não pertence a domínio nenhum: é o painel de entrada. */
 export const TELA_HOME: TelaComDominio = {
   key: "home",
-  label: "Visão geral",
+  label: "Início",
   href: "/dashboards",
   palavrasChave: ["inicio", "home", "pulso", "mission control"],
   dominioKey: "geral",

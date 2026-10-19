@@ -8,6 +8,7 @@ import {
   listarUsuariosAdmin,
   criarUsuarioAdmin,
   atualizarAcessoLocal,
+  AtribuicaoContratanteInvalida,
 } from "@/lib/usuarios-admin"
 
 export const dynamic = "force-dynamic"
@@ -56,6 +57,9 @@ const acessoSchema = z.object({
 })
 
 function mapaErro(e: unknown): NextResponse {
+  if (e instanceof AtribuicaoContratanteInvalida) {
+    return NextResponse.json({ error: e.message }, { status: 400 })
+  }
   if (e instanceof GlobalAuthError) {
     return NextResponse.json({ error: e.message }, { status: e.status || 502 })
   }

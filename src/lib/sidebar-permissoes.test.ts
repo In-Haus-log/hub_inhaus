@@ -20,6 +20,8 @@ describe("navegação do cliente com indicadores concedidos", () => {
   })
   it("não inclui indicadores internos não concedidos", () => {
     const html = renderToStaticMarkup(React.createElement(DashboardSidebar, { classificacao: "CLIENTE", visibleScreens: ["cliente-bi:42"], clientesBi: [cliente] }))
+    expect(html).toContain('href="/dashboards"')
+    expect(html).toContain("Início")
     expect(html).not.toContain('href="/dashboards/conformidade-legal"')
     expect(html).toContain('href="/dashboards/clientes/bi/42/10"')
   })

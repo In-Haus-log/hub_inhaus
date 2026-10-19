@@ -18,8 +18,9 @@ import {
   normalizeEmail,
   type GlobalAuthUser,
 } from "@/lib/global-auth"
-import { sanitizarTelas } from "@/lib/domains"
+import { sanitizarTelas, TODAS_AS_TELAS } from "@/lib/domains"
 import { definirSegurancaCentral, listarAuthUserIdsSeguranca } from "@/lib/epi/config"
+import { chaveClienteBi } from "@/lib/powerbi-permissoes"
 
 export type UsuarioAdmin = {
   authUserId: string | null
@@ -44,6 +45,51 @@ export type UsuarioAdmin = {
   crs: string[]
   /** Escopo multi-tenant: clientes contratantes vinculados (ids). */
   contratantes: number[]
+}
+
+/** Resolve as chaves BI, telas fixas de cliente e grupos SRA dos clientes cadastrados. */
+export class AtribuicaoContratanteInvalida extends Error {}
+
+async function resolverAtribuicaoContratantes(
+  ids: number[],
+  telas: string[],
+): Promise<{ telas: string[]; grupos: string[] }> {
+  const unicos = Array.from(new Set(ids))
+  const clientes = unicos.length
+    ? await prisma.clienteContratante.findMany({
+        where: { id: { in: unicos }, ativo: true },
+        select: { id: true, nome: true, slug: true },
+      })
+    : []
+  if (clientes.length !== unicos.length) {
+    throw new AtribuicaoContratanteInvalida("Um ou mais clientes selecionados não existem ou estão inativos.")
+  }
+
+  const normalizar = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLocaleLowerCase("pt-BR")
+  const nomes = new Set(clientes.map(c => normalizar(c.nome)))
+  const gruposRows = nomes.size
+    ? await prisma.$queryRaw<{ nome_grp_cliente: string }[]>`
+        select distinct nome_grp_cliente from dm_cr where nome_grp_cliente is not null
+      `
+    : []
+  const grupos = gruposRows
+    .filter(g => nomes.has(normalizar(g.nome_grp_cliente)))
+    .map(g => g.nome_grp_cliente)
+  const slugsEstaticosDosClientes = new Set(
+    TODAS_AS_TELAS
+      .filter(t => t.clienteKey && clientes.some(c => normalizar(c.nome) === normalizar(t.clienteLabel ?? "") || c.slug === t.clienteKey))
+      .map(t => t.clienteKey as string),
+  )
+  const telasPermitidas = new Set(TODAS_AS_TELAS.map(t => t.key))
+  const telasFiltradas = telas.filter(t => {
+    if (/^cliente-bi:\d+$/.test(t)) return false
+    const tela = TODAS_AS_TELAS.find(candidata => candidata.key === t)
+    return telasPermitidas.has(t) && (!tela?.clienteKey || slugsEstaticosDosClientes.has(tela.clienteKey))
+  })
+  return {
+    telas: Array.from(new Set([...telasFiltradas, ...clientes.map(c => chaveClienteBi(c.id))])),
+    grupos,
+  }
 }
 
 /** Mescla as identidades do global_auth com o acesso local (auth_users). */
@@ -122,6 +168,15 @@ export async function criarUsuarioAdmin(input: {
   contratantes?: number[]
 }): Promise<UsuarioAdmin> {
   const email = normalizeEmail(input.email)
+  // Valida a atribuição antes de criar a identidade no serviço central.
+  let telas = sanitizarTelas(input.visibleScreens)
+  let gruposContratantes: string[] | undefined
+  if (input.contratantes !== undefined) {
+    const resolvido = await resolverAtribuicaoContratantes(input.contratantes, telas)
+    telas = sanitizarTelas(resolvido.telas)
+    gruposContratantes = resolvido.grupos
+  }
+
   let identidade: GlobalAuthUser | null = null
   try {
     identidade = await createGlobalAuthUser({
@@ -141,40 +196,43 @@ export async function criarUsuarioAdmin(input: {
     }
   }
 
-  const telas = sanitizarTelas(input.visibleScreens)
-  const local = await prisma.authUser.upsert({
-    where: { email },
-    update: {
-      authUserId: identidade?.id ?? undefined,
-      name: input.name,
-      isAdmin: input.isAdmin,
-      isAnalista: input.isAnalista,
-      hasAccess: input.hasAccess,
-      visibleScreens: telas,
-    },
-    create: {
+  const { local, uuid } = await prisma.$transaction(async (tx) => {
+    const local = await tx.authUser.upsert({
+      where: { email },
+      update: {
+        authUserId: identidade?.id ?? undefined,
+        name: input.name,
+        isAdmin: input.isAdmin,
+        isAnalista: input.isAnalista,
+        hasAccess: input.hasAccess,
+        visibleScreens: telas,
+      },
+      create: {
+        email,
+        authUserId: identidade?.id ?? null,
+        name: input.name,
+        isAdmin: input.isAdmin,
+        isAnalista: input.isAnalista,
+        hasAccess: input.hasAccess,
+        visibleScreens: telas,
+      },
+    })
+    const uuid = local.authUserId ?? identidade?.id ?? null
+    await salvarClassificacaoEVinculos(
       email,
-      authUserId: identidade?.id ?? null,
-      name: input.name,
-      isAdmin: input.isAdmin,
-      isAnalista: input.isAnalista,
-      hasAccess: input.hasAccess,
-      visibleScreens: telas,
-    },
+      uuid,
+      input.classificacao,
+      input.contratantes !== undefined ? gruposContratantes : input.clientes,
+      input.contratantes !== undefined ? [] : input.crs,
+      input.contratantes,
+      tx,
+    )
+    return { local, uuid }
   })
 
   // Papel Segurança precisa do UUID do global_auth (chave de epi_membro).
-  const uuid = local.authUserId ?? identidade?.id ?? null
   const ehSeg = Boolean(uuid && input.seguranca)
   if (uuid && input.seguranca) await definirSegurancaCentral(uuid, true)
-  await salvarClassificacaoEVinculos(
-    email,
-    uuid,
-    input.classificacao,
-    input.clientes,
-    input.crs,
-    input.contratantes,
-  )
 
   return {
     authUserId: uuid,
@@ -189,8 +247,8 @@ export async function criarUsuarioAdmin(input: {
     visibleScreens: local.visibleScreens,
     ehSeguranca: ehSeg,
     classificacao: input.classificacao,
-    clientes: input.clientes ?? [],
-    crs: input.crs ?? [],
+    clientes: input.contratantes !== undefined ? gruposContratantes ?? [] : input.clientes ?? [],
+    crs: input.contratantes !== undefined ? [] : input.crs ?? [],
     contratantes: input.contratantes ?? [],
   }
 }
@@ -214,45 +272,53 @@ export async function atualizarAcessoLocal(input: {
   contratantes?: number[]
 }): Promise<UsuarioAdmin> {
   const email = normalizeEmail(input.email)
-  const telas = sanitizarTelas(input.visibleScreens)
-  const local = await prisma.authUser.upsert({
-    where: { email },
-    update: {
-      hasAccess: input.hasAccess,
-      isAdmin: input.isAdmin,
-      isAnalista: input.isAnalista ?? undefined,
-      visibleScreens: telas,
-      authUserId: input.authUserId ?? undefined,
-      name: input.name ?? undefined,
-    },
-    create: {
+  let telas = sanitizarTelas(input.visibleScreens)
+  let gruposContratantes: string[] | undefined
+  if (input.contratantes !== undefined) {
+    const resolvido = await resolverAtribuicaoContratantes(input.contratantes, telas)
+    telas = sanitizarTelas(resolvido.telas)
+    gruposContratantes = resolvido.grupos
+  }
+  const classe = input.classificacao ?? "INTERNO"
+  const { local, uuid } = await prisma.$transaction(async (tx) => {
+    const local = await tx.authUser.upsert({
+      where: { email },
+      update: {
+        hasAccess: input.hasAccess,
+        isAdmin: input.isAdmin,
+        isAnalista: input.isAnalista ?? undefined,
+        visibleScreens: telas,
+        authUserId: input.authUserId ?? undefined,
+        name: input.name ?? undefined,
+      },
+      create: {
+        email,
+        authUserId: input.authUserId ?? null,
+        name: input.name ?? null,
+        hasAccess: input.hasAccess,
+        isAdmin: input.isAdmin,
+        isAnalista: input.isAnalista ?? false,
+        visibleScreens: telas,
+      },
+    })
+    const uuid = local.authUserId ?? input.authUserId ?? null
+    await salvarClassificacaoEVinculos(
       email,
-      authUserId: input.authUserId ?? null,
-      name: input.name ?? null,
-      hasAccess: input.hasAccess,
-      isAdmin: input.isAdmin,
-      isAnalista: input.isAnalista ?? false,
-      visibleScreens: telas,
-    },
+      uuid,
+      classe,
+      input.contratantes !== undefined ? gruposContratantes : input.clientes,
+      input.contratantes !== undefined ? [] : input.crs,
+      input.contratantes,
+      tx,
+    )
+    return { local, uuid }
   })
 
-  // Papel Segurança (só dá para amarrar se o usuário tem UUID do global_auth).
-  const uuid = local.authUserId ?? input.authUserId ?? null
   let ehSeg = false
   if (uuid && input.seguranca !== undefined) {
     await definirSegurancaCentral(uuid, input.seguranca)
     ehSeg = input.seguranca
   }
-
-  const classe = input.classificacao ?? "INTERNO"
-  await salvarClassificacaoEVinculos(
-    email,
-    uuid,
-    classe,
-    input.clientes,
-    input.crs,
-    input.contratantes,
-  )
 
   return {
     authUserId: uuid,
@@ -267,8 +333,8 @@ export async function atualizarAcessoLocal(input: {
     visibleScreens: local.visibleScreens,
     ehSeguranca: ehSeg,
     classificacao: classe,
-    clientes: input.clientes ?? [],
-    crs: input.crs ?? [],
+    clientes: input.contratantes !== undefined ? gruposContratantes ?? [] : input.clientes ?? [],
+    crs: input.contratantes !== undefined ? [] : input.crs ?? [],
     contratantes: input.contratantes ?? [],
   }
 }
@@ -286,47 +352,38 @@ async function salvarClassificacaoEVinculos(
   clientes: string[] | undefined,
   crs: string[] | undefined,
   contratantes: number[] | undefined,
+  tx: Prisma.TransactionClient,
 ): Promise<void> {
-  await prisma.authUser.update({ where: { email }, data: { classificacao } })
+  await tx.authUser.update({ where: { email }, data: { classificacao } })
   if (!uuid) return
 
-  const ops: Prisma.PrismaPromise<unknown>[] = []
-
   if (clientes !== undefined) {
-    ops.push(prisma.authUserCliente.deleteMany({ where: { authUserId: uuid } }))
+    await tx.authUserCliente.deleteMany({ where: { authUserId: uuid } })
     if (clientes.length) {
-      ops.push(
-        prisma.authUserCliente.createMany({
-          data: clientes.map((nomeGrpCliente) => ({ authUserId: uuid, nomeGrpCliente })),
-          skipDuplicates: true,
-        }),
-      )
+      await tx.authUserCliente.createMany({
+        data: clientes.map((nomeGrpCliente) => ({ authUserId: uuid, nomeGrpCliente })),
+        skipDuplicates: true,
+      })
     }
   }
 
   if (crs !== undefined) {
-    ops.push(prisma.authUserCr.deleteMany({ where: { authUserId: uuid } }))
+    await tx.authUserCr.deleteMany({ where: { authUserId: uuid } })
     if (crs.length) {
-      ops.push(
-        prisma.authUserCr.createMany({
-          data: crs.map((cr) => ({ authUserId: uuid, cr })),
-          skipDuplicates: true,
-        }),
-      )
+      await tx.authUserCr.createMany({
+        data: crs.map((cr) => ({ authUserId: uuid, cr })),
+        skipDuplicates: true,
+      })
     }
   }
 
   if (contratantes !== undefined) {
-    ops.push(prisma.authUserContratante.deleteMany({ where: { authUserId: uuid } }))
+    await tx.authUserContratante.deleteMany({ where: { authUserId: uuid } })
     if (contratantes.length) {
-      ops.push(
-        prisma.authUserContratante.createMany({
-          data: contratantes.map((contratanteId) => ({ authUserId: uuid, contratanteId })),
-          skipDuplicates: true,
-        }),
-      )
+      await tx.authUserContratante.createMany({
+        data: contratantes.map((contratanteId) => ({ authUserId: uuid, contratanteId })),
+        skipDuplicates: true,
+      })
     }
   }
-
-  if (ops.length) await prisma.$transaction(ops)
 }
