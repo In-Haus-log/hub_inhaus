@@ -16,6 +16,8 @@ import {
 } from "@/lib/global-auth"
 import { prisma } from "@/lib/prisma"
 import { CHAVES_DE_TELA } from "@/lib/domains"
+import { expandirTelasAutorizadasContratantes } from "@/lib/clientes-autorizacao"
+import { idsClientesBi } from "@/lib/powerbi-permissoes"
 
 // Nomes prefixados com o slug do projeto para não colidir com outros apps no domínio.
 const COOKIE_PREFIX = "inhaus"
@@ -98,6 +100,15 @@ async function resolveAuthorization(user: GlobalAuthUser): Promise<Authorization
       })
     }
 
+    const vinculos = registro.isAdmin ? [] : await prisma.authUserContratante.findMany({
+      where: { authUserId: user.id },
+      select: { contratanteId: true },
+    })
+    const telas = registro.isAdmin ? CHAVES_DE_TELA : await expandirTelasAutorizadasContratantes(
+      registro.visibleScreens ?? [],
+      [...vinculos.map(v => v.contratanteId), ...idsClientesBi(registro.visibleScreens ?? [])],
+    )
+
     return {
       usuarioId: registro.id,
       email: registro.email,
@@ -107,7 +118,7 @@ async function resolveAuthorization(user: GlobalAuthUser): Promise<Authorization
       hasAccess: registro.hasAccess,
       classificacao: registro.classificacao ?? "INTERNO",
       // Admin enxerga TODAS as telas, sem restrição; demais usam o que foi concedido.
-      visibleScreens: registro.isAdmin ? CHAVES_DE_TELA : (registro.visibleScreens ?? []),
+      visibleScreens: telas,
     }
   } catch {
     // Banco indisponível: o admin bootstrap ainda autentica (sem id persistido).

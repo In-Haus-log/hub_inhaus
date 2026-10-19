@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect, useState, type ReactNode } from "react"
-import { useRouter } from "next/navigation"
 import { Menu, X, Search } from "lucide-react"
 
 import { cn } from "@/lib/utils"
@@ -31,7 +30,6 @@ type DashboardShellProps = {
 }
 
 export function DashboardShell({ children, nome, email, isAdmin, isAnalista = false, clientesBi = [], epiConfig = false, epiValida = false, visibleScreens = null, classificacao = "INTERNO" }: DashboardShellProps) {
-  const router = useRouter()
   const [drawer, setDrawer] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
 
@@ -50,7 +48,7 @@ export function DashboardShell({ children, nome, email, isAdmin, isAnalista = fa
     } catch {
       /* logout local não depende do servidor */
     }
-    router.push("/login")
+    window.location.replace("/login")
   }
 
   return (

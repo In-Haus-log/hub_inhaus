@@ -1,7 +1,6 @@
 "use client"
 
 import { useState } from "react"
-import { useRouter } from "next/navigation"
 import { Loader2, Lock, Mail, ShieldCheck, ArrowRight } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -11,7 +10,6 @@ import { Label } from "@/components/ui/label"
 type Step = "credentials" | "twoFactor"
 
 export function LoginForm() {
-  const router = useRouter()
   const [step, setStep] = useState<Step>("credentials")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -40,8 +38,7 @@ export function LoginForm() {
         setStep("twoFactor")
         return
       }
-      router.push("/dashboards")
-      router.refresh()
+      window.location.replace("/dashboards")
     } catch {
       setError("Falha de conexão. Tente novamente.")
     } finally {
@@ -64,8 +61,7 @@ export function LoginForm() {
         setError(data?.error ?? "Código inválido.")
         return
       }
-      router.push("/dashboards")
-      router.refresh()
+      window.location.replace("/dashboards")
     } catch {
       setError("Falha de conexão. Tente novamente.")
     } finally {

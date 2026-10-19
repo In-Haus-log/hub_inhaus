@@ -203,6 +203,22 @@ describe("permissões ao criar e atualizar usuários do hub", () => {
     expect(result).toMatchObject({ visibleScreens: ["controle-quadro", "cliente-bi:42"], clientes: ["ACME BRASIL"], crs: [] })
   })
 
+  it("concede todos os sistemas estáticos do contratante mesmo sem seleção individual", async () => {
+    mocks.prisma.clienteContratante.findMany.mockResolvedValue([{ id: 42, nome: "Atlas Copco", slug: "slug-atlas" }])
+    mocks.prisma.authUser.upsert.mockImplementation(async ({ update }: { update: Record<string, unknown> }) =>
+      usuarioLocal({ authUserId: "global-uuid-1", email: "pessoa@exemplo.com", ...update }),
+    )
+
+    const result = await atualizarAcessoLocal({
+      email: "pessoa@exemplo.com", authUserId: "global-uuid-1", hasAccess: true,
+      isAdmin: false, visibleScreens: ["controle-quadro"], contratantes: [42],
+    })
+
+    expect(result.visibleScreens).toEqual(expect.arrayContaining([
+      "controle-quadro", "cliente-bi:42", "desvios-painel", "desvios-acompanhamento", "desvios-formulario",
+    ]))
+  })
+
   it("falha fechado para contratante inexistente ou inativo", async () => {
     mocks.prisma.clienteContratante.findMany.mockResolvedValue([])
     await expect(atualizarAcessoLocal({

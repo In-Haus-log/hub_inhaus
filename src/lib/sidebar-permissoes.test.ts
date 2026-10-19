@@ -9,6 +9,16 @@ vi.mock("@/components/brand/InhausLogo", () => ({ InhausLogo: () => null }))
 import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar"
 
 describe("navegação do cliente com indicadores concedidos", () => {
+  it("renderiza início e todos os BIs de um cliente com uma única concessão", () => {
+    const relatorios = [1, 2, 3, 4].map(id => ({ id, titulo: `Relatório ${id}`, icone: "chart-column" }))
+    const html = renderToStaticMarkup(React.createElement(DashboardSidebar, {
+      classificacao: "CLIENTE", visibleScreens: ["turnover", "cliente-bi:6", "epi-lideres"],
+      clientesBi: [{ id: 6, nome: "Amyris", slug: "amyris-exemplo", relatorios }],
+    }))
+    expect(html).toContain('href="/dashboards"')
+    for (const { id } of relatorios) expect(html).toContain(`href="/dashboards/clientes/bi/6/${id}"`)
+    expect(html).not.toContain('href="/dashboards/clientes/atlas/desvios"')
+  })
   const cliente = { id: 42, nome: "Cliente autorizado", slug: "cliente-autorizado", relatorios: [{ id: 10, titulo: "Operação", icone: "factory" }] }
   it("exibe o BI e o indicador interno explicitamente concedidos", () => {
     const html = renderToStaticMarkup(React.createElement(DashboardSidebar, { classificacao: "CLIENTE", visibleScreens: ["cliente-bi:42", "conformidade-legal"], clientesBi: [cliente] }))

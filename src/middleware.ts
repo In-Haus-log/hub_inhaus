@@ -58,10 +58,8 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // Já logado tentando abrir /login → manda para o app.
-  if (pathname === "/login" && temSessao) {
-    return NextResponse.redirect(new URL(ROTA_INICIAL, request.url))
-  }
+  // A presença de cookie não prova uma sessão válida. O login permanece acessível
+  // para permitir nova autenticação quando os cookies estão expirados ou revogados.
 
   return seguir()
 }

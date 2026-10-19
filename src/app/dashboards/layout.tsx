@@ -15,6 +15,7 @@ export default async function DashboardsLayout({ children }: { children: React.R
   // (Internos seguem pelas guardas de página; admin passa sempre.)
   if (papeis.classificacao === "CLIENTE" && !papeis.isAdmin) {
     const path = headers().get(HEADER_PATHNAME) ?? ""
+    if (!path) throw new Error("Não foi possível identificar a página solicitada.")
     const visiveis = telasVisiveis({
       isAdmin: papeis.isAdmin,
       visibleScreens: papeis.visibleScreens,

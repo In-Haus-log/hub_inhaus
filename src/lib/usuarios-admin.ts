@@ -20,7 +20,7 @@ import {
 } from "@/lib/global-auth"
 import { sanitizarTelas, TODAS_AS_TELAS } from "@/lib/domains"
 import { definirSegurancaCentral, listarAuthUserIdsSeguranca } from "@/lib/epi/config"
-import { chaveClienteBi } from "@/lib/powerbi-permissoes"
+import { expandirTelasDeContratantes } from "@/lib/clientes-autorizacao"
 
 export type UsuarioAdmin = {
   authUserId: string | null
@@ -86,10 +86,7 @@ async function resolverAtribuicaoContratantes(
     const tela = TODAS_AS_TELAS.find(candidata => candidata.key === t)
     return telasPermitidas.has(t) && (!tela?.clienteKey || slugsEstaticosDosClientes.has(tela.clienteKey))
   })
-  return {
-    telas: Array.from(new Set([...telasFiltradas, ...clientes.map(c => chaveClienteBi(c.id))])),
-    grupos,
-  }
+  return { telas: expandirTelasDeContratantes(telasFiltradas, clientes), grupos }
 }
 
 /** Mescla as identidades do global_auth com o acesso local (auth_users). */
