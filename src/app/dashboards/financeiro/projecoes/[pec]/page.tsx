@@ -1,3 +1,4 @@
+import { escopoRegionalProjecoes } from "@/lib/projecoes/regional"
 import type { Metadata } from "next"
 import Link from "next/link"
 import { notFound } from "next/navigation"
@@ -8,8 +9,9 @@ import { ParametrizacaoInfo } from "@/components/projecoes/ParametrizacaoInfo"
 import { ParametrizacaoPec } from "@/components/projecoes/ParametrizacaoPec"
 import { assertTelaVisivel } from "@/lib/dashboard-acesso"
 import { escopoDaPagina, TELA_FLASH } from "@/lib/flash/acesso"
-import { crsDoEscopo, ErroFlash, garantirPecNoEscopo, listarItens } from "@/lib/flash/dados"
+import { ErroFlash, garantirPecNoEscopo, listarItens } from "@/lib/flash/dados"
 import { valorLinha, type Natureza } from "@/lib/flash/calculos"
+import { crsDoPec } from "@/lib/projecoes/catalogo"
 import { tituloNome } from "@/lib/nomes"
 
 export const metadata: Metadata = { title: "Projeções · Parametrização do PEC" }
@@ -23,7 +25,7 @@ export default async function ParametrizacaoPecPage({
   searchParams: Record<string, string | string[] | undefined>
 }) {
   await assertTelaVisivel(TELA_FLASH)
-  const escopo = await escopoDaPagina()
+  const escopo = await escopoRegionalProjecoes(await escopoDaPagina())
 
   let pec
   try {
@@ -32,7 +34,7 @@ export default async function ParametrizacaoPecPage({
     if (e instanceof ErroFlash && e.status === 404) notFound()
     throw e
   }
-  const [itens, crs] = await Promise.all([listarItens(escopo, pec.pecCod), crsDoEscopo(escopo)])
+  const [itens, crs] = await Promise.all([listarItens(escopo, pec.pecCod), crsDoPec(escopo, pec.pecCod)])
 
   const mes = typeof searchParams.mes === "string" ? searchParams.mes : null
   const semana = typeof searchParams.semana === "string" ? searchParams.semana : null
@@ -67,11 +69,11 @@ export default async function ParametrizacaoPecPage({
           <p className="mt-1 font-display text-2xl font-semibold tabular-nums text-navy">{ativos.length}</p>
         </div>
         <div className="glass rounded-3xl p-4">
-          <p className="text-xs text-muted-foreground">Receita padrão do mês</p>
+          <p className="text-xs text-muted-foreground">Receita padrão</p>
           <p className="mt-1 font-display text-2xl font-semibold tabular-nums text-navy">{moeda(receitaMes)}</p>
         </div>
         <div className="glass col-span-2 rounded-3xl p-4 lg:col-span-1">
-          <p className="text-xs text-muted-foreground">Custo padrão do mês</p>
+          <p className="text-xs text-muted-foreground">Custo padrão</p>
           <p className="mt-1 font-display text-2xl font-semibold tabular-nums text-navy">{moeda(custoMes)}</p>
         </div>
       </section>

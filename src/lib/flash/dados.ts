@@ -2,6 +2,7 @@ import type { PoolClient } from "pg"
 import type { z } from "zod"
 
 import { inhausPool } from "@/lib/db-inhaus"
+import { crsDoPec } from "@/lib/projecoes/catalogo"
 import { assertLinhasNoEscopo, predicadoSraCr, type EscopoDados } from "@/lib/seguranca/escopo-dados"
 
 import {
@@ -81,20 +82,23 @@ const linhaParaItem = (r: any): Item => ({
   agrupador: r.agrupador,
   ordem: Number(r.ordem),
   ativo: r.ativo,
+  parametros: r.parametros?.aba ? r.parametros : undefined,
 })
 
 // ---- PECs --------------------------------------------------------------------------
+// Registrar somente quando houver uma ação de escrita; abrir parametrização é só leitura.
+async function registrarPec(pec: PecFlash): Promise<void> {
+  await inhausPool.query(`insert into public.dm_flash_pec (pec_cod,pec_nome,cr_cod,gerente,criado_por)
+    values ($1,$2,$3,$4,'Projeções') on conflict (pec_cod) do nothing`,
+    [pec.pecCod,pec.pecNome,pec.crCod,pec.gerente])
+}
+
 
 export async function garantirPecNoEscopo(escopo: EscopoDados, pecCod: string): Promise<PecFlash> {
-  const f = filtroCr(escopo, "p.cr_cod", 2)
-  const { rows } = await inhausPool.query(
-    `select pec_cod, pec_nome, cr_cod, gerente from public.dm_flash_pec p where p.pec_cod = $1 and p.ativo${f.sql}`,
-    [pecCod, ...f.params],
-  )
-  assertLinhasNoEscopo(rows, (r) => r.cr_cod, escopo)
-  if (!rows[0]) throw new ErroFlash("PEC não encontrado.", 404)
-  const r = rows[0]
-  return { pecCod: r.pec_cod, pecNome: r.pec_nome, crCod: r.cr_cod, gerente: r.gerente }
+  const crs = await crsDoPec(escopo, pecCod)
+  if (!crs.length) throw new ErroFlash("PEC não encontrado ou fora do seu acesso.", 404)
+  const cr = crs[0]
+  return { pecCod, pecNome: cr.pecNome ?? `PEC ${pecCod}`, crCod: cr.cr, gerente: cr.gerente }
 }
 
 /** PECs do RE x OR (no escopo) ainda não habilitados. Usa o registro mais recente de cada PEC. */
@@ -162,7 +166,8 @@ export async function listarItens(escopo: EscopoDados, pecCod: string): Promise<
   await garantirPecNoEscopo(escopo, pecCod)
   const f = filtroCr(escopo, "i.cr_cod", 2)
   const { rows } = await inhausPool.query(
-    `select * from public.dm_flash_item i where i.pec_cod = $1${f.sql}
+    `select i.* from public.dm_flash_item i where i.pec_cod = $1${f.sql}
+        and exists (select 1 from public.dm_cr c where c.cr=i.cr_cod and btrim(c.pec)=i.pec_cod)
       order by (i.natureza = 'CUSTO'), i.ativo desc, i.ordem, i.id`,
     [pecCod, ...f.params],
   )
@@ -179,21 +184,24 @@ export async function salvarItem(
   const pec = await garantirPecNoEscopo(escopo, pecCod)
   const crItem = d.crCod ?? pec.crCod
   if (!crNoEscopo(escopo, crItem)) throw new ErroFlash("Este CR está fora do seu escopo.", 403)
-  const valores = [d.descricao, d.tipo, d.valorUnitario, d.qtdPadrao, d.agrupador, d.ordem, d.natureza, crItem]
+  const vinculados = await crsDoPec(escopo, pecCod)
+  if (!vinculados.some(c => c.cr === crItem)) throw new ErroFlash("Este CR não pertence ao PEC selecionado.", 400)
+  await registrarPec(pec)
+  const valores = [d.descricao, d.tipo, d.valorUnitario, d.qtdPadrao, d.agrupador, d.ordem, d.natureza, crItem, d.parametros ? JSON.stringify(d.parametros) : null]
   const c = await inhausPool.connect()
   try {
     await c.query("begin")
-    const f = filtroCr(escopo, "cr_cod", 11)
+    const f = filtroCr(escopo, "cr_cod", 12)
     const { rows } = id
       ? await c.query(
           `update public.dm_flash_item set descricao=$1, tipo=$2, valor_unitario=$3, qtd_padrao=$4,
-                  agrupador=$5, ordem=$6, natureza=$7, cr_cod=$8, atualizado_em=now()
-            where id=$9 and pec_cod=$10${f.sql} returning *`,
+                  agrupador=$5, ordem=$6, natureza=$7, cr_cod=$8, parametros=coalesce($9::jsonb,parametros), atualizado_em=now()
+            where id=$10 and pec_cod=$11${f.sql} returning *`,
           [...valores, id, pecCod, ...f.params],
         )
       : await c.query(
-          `insert into public.dm_flash_item (descricao, tipo, valor_unitario, qtd_padrao, agrupador, ordem, natureza, cr_cod, pec_cod)
-           values ($1,$2,$3,$4,$5,$6,$7,$8,$9) returning *`,
+          `insert into public.dm_flash_item (descricao, tipo, valor_unitario, qtd_padrao, agrupador, ordem, natureza, cr_cod, parametros, pec_cod)
+           values ($1,$2,$3,$4,$5,$6,$7,$8,coalesce($9::jsonb,'{}'::jsonb),$10) returning *`,
           [...valores, pecCod],
         )
     if (!rows[0]) throw new ErroFlash("Item não encontrado.", 404)
@@ -261,7 +269,8 @@ async function linhasDaSemana(c: Executor, id: number, escopo: EscopoDados): Pro
   const { rows } = await c.query(
     `select si.item_id, si.valor_unitario, si.quantidade, si.cr_cod
        from public.ft_flash_semana_item si join public.dm_flash_item i on i.id = si.item_id
-      where si.semana_id = $1${f.sql} order by i.ordem, i.id`,
+      where si.semana_id = $1${f.sql}
+        and exists (select 1 from public.dm_cr c where c.cr=si.cr_cod and btrim(c.pec)=i.pec_cod) order by i.ordem, i.id`,
     [id, ...f.params],
   )
   assertLinhasNoEscopo(rows, (r) => r.cr_cod, escopo)
@@ -279,15 +288,15 @@ async function ultimaEnviadaAntes(
   p: Periodo,
 ): Promise<{ linhas: LinhaSemana[]; liquida: number } | null> {
   // ROL comparável = receita das linhas NO ESCOPO × (1 − alíquota daquela semana); nunca o valor do contrato inteiro.
-  const f = filtroCr(escopo, "si.cr_cod", 5)
+  const f = filtroCr(escopo, "si.cr_cod", 4)
   const { rows } = await inhausPool.query(
     `select s.id, s.aliquota::float8 as aliquota,
             coalesce((select sum(si.total) from public.ft_flash_semana_item si
                        where si.semana_id = s.id and si.natureza = 'RECEITA'${f.sql}), 0)::float8 as bruta
        from public.ft_flash_semana s
-      where s.pec_cod=$1 and s.cr_cod=$4 and s.status='ENVIADO'
+      where s.pec_cod=$1 and s.status='ENVIADO'
         and (s.mes, s.semana) < ($2::date, $3::smallint) order by s.mes desc, s.semana desc limit 1`,
-    [pec.pecCod, mesParaData(p.mes), p.semana, pec.crCod, ...f.params],
+    [pec.pecCod, mesParaData(p.mes), p.semana, ...f.params],
   )
   if (!rows[0]) return null
   return {
@@ -315,8 +324,8 @@ async function buscarCabecalho(pec: PecFlash, p: Periodo) {
     `select * from public.ft_flash_semana where pec_cod=$1 and mes=$2::date and semana=$3`,
     [pec.pecCod, mesParaData(p.mes), p.semana],
   )
-  // Semana gravada sob outro CR (PEC que mudou de CR) nunca é exibida neste escopo.
-  if (rows[0] && rows[0].cr_cod !== pec.crCod) throw new ErroFlash("Semana pertence a outro CR.", 404)
+  // Autorização deriva dos CRs atuais do PEC em garantirPecNoEscopo.
+  // As linhas são filtradas individualmente por CR; o CR antigo do cabeçalho não é o escopo do PEC.
   return rows[0] ?? null
 }
 
@@ -337,6 +346,7 @@ async function realizadoUltimoMes(pec: PecFlash): Promise<{ mes: string; rol: nu
 export async function abrirSemana(escopo: EscopoDados, pecCod: string, periodo: Periodo): Promise<SemanaCompleta> {
   const pec = await garantirPecNoEscopo(escopo, pecCod)
   const itens = await listarItens(escopo, pecCod)
+  await registrarPec(pec)
   const anterior = await ultimaEnviadaAntes(escopo, pec, periodo)
   let s = await buscarCabecalho(pec, periodo)
 

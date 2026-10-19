@@ -5,6 +5,7 @@ import { DashboardShell } from "@/components/dashboard/DashboardShell"
 import { resolverPapeisDashboard } from "@/lib/dashboard-acesso"
 import { telasVisiveis } from "@/lib/domains"
 import { HEADER_PATHNAME } from "@/lib/http-headers"
+import { rotaClienteBi } from "@/lib/powerbi-permissoes"
 
 export default async function DashboardsLayout({ children }: { children: React.ReactNode }) {
   const papeis = await resolverPapeisDashboard()
@@ -20,8 +21,10 @@ export default async function DashboardsLayout({ children }: { children: React.R
     }).filter((t) => t.key !== "home")
     const permitido =
       path === "/dashboards" ||
+      (Boolean(papeis.isAnalista) && ["/dashboards/powerbi", "/dashboards/administracao/clientes", "/dashboards/administracao/relatorios"].includes(path)) ||
+      (papeis.clientesBi ?? []).some(c => path === rotaClienteBi(c.id) || path.startsWith(`${rotaClienteBi(c.id)}/`)) ||
       visiveis.some((t) => path === t.href || path.startsWith(`${t.href}/`))
-    if (!permitido) redirect(visiveis[0]?.href ?? "/dashboards")
+    if (!permitido) redirect(visiveis[0]?.href ?? (papeis.clientesBi?.[0] ? rotaClienteBi(papeis.clientesBi[0].id) : "/dashboards"))
   }
 
   return (
@@ -29,6 +32,8 @@ export default async function DashboardsLayout({ children }: { children: React.R
       nome={papeis.nome}
       email={papeis.email}
       isAdmin={papeis.isAdmin}
+      isAnalista={papeis.isAnalista}
+      clientesBi={papeis.clientesBi}
       epiConfig={papeis.epiConfig}
       epiValida={papeis.epiValida}
       soPreenche={papeis.soPreenche}

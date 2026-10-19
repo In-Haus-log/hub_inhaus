@@ -22,11 +22,21 @@ export const itemSchema = z
       .transform((v) => v || null),
     agrupador: z.string().trim().max(60).nullish().transform((v) => v || null),
     ordem: z.coerce.number().int().default(0),
+    parametros: z.object({
+      aba: z.enum(["Pessoas", "Hora Extra", "Variáveis", "Glosas"]),
+      unidadeMedida: z.string().trim().min(1).max(30),
+      remuneracao: z.enum(["FIXO", "VARIAVEL"]),
+      turno: z.string().trim().max(60).nullable(),
+    }).optional(),
   })
   .refine((d) => TIPOS_POR_NATUREZA[d.natureza].includes(d.tipo), {
     message: "Este tipo não existe para a natureza escolhida.",
     path: ["tipo"],
   })
+  .refine(d => !d.parametros || !!d.agrupador?.trim(), { message: "Informe Área / Turno.", path: ["agrupador"] })
+  .refine(d => !d.parametros || d.parametros.aba !== "Hora Extra" || ["Horas", "Verba"].includes(d.parametros.unidadeMedida), { message: "Hora extra deve ser lançada por horas ou valor consolidado.", path: ["parametros", "unidadeMedida"] })
+  .refine(d => d.tipo !== "PESSOAS" || Number.isInteger(d.qtdPadrao), { message: "Quantidade de pessoas deve ser inteira.", path: ["qtdPadrao"] })
+  .refine(d => !d.parametros || (d.parametros.aba === "Glosas" ? d.tipo === "DESCONTO" : d.parametros.aba === "Hora Extra" ? d.tipo === "HORA_EXTRA" : d.parametros.aba === "Pessoas" ? d.tipo === "PESSOAS" || d.tipo === "UNITARIO" : d.tipo !== "DESCONTO" && d.tipo !== "HORA_EXTRA" && d.tipo !== "PESSOAS"), { message: "A estrutura do item não corresponde à aba escolhida.", path: ["parametros"] })
 
 export const rascunhoSchema = z.object({
   linhas: z.array(z.object({

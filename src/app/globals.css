@@ -2,6 +2,17 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Categorias da conformidade: mesma cor no card, na legenda e nos gráficos.
+   Azul/teal para jornada, âmbar para exceções, verde para descanso e cyan para férias. */
+.conformidade-legal {
+  --ocorrencia-1: 207 72% 40%;
+  --ocorrencia-2: 193 96% 29%;
+  --ocorrencia-3: 30 82% 43%;
+  --ocorrencia-4: 158 55% 32%;
+  --ocorrencia-5: 205 100% 20%;
+  --ocorrencia-6: 185 70% 35%;
+}
+
 @layer base {
   :root {
     /* Tema In-Haus — mist quase branco + navy profundo da marca (#002443),
@@ -116,6 +127,21 @@
     background-size: 22px 22px;
   }
 
+
+  /* Shared chart treatment: glow only on marks, preserving labels and axes. */
+  .recharts-line-curve,
+  .recharts-area-curve {
+    stroke-dasharray: none;
+    filter: drop-shadow(0 0 3px hsl(var(--accent) / 0.28));
+  }
+
+  .recharts-bar-rectangle,
+  .recharts-pie-sector,
+  .recharts-radial-bar-sector,
+  .recharts-scatter-symbol,
+  .visual-glow-bar {
+    filter: drop-shadow(0 0 3px hsl(var(--accent) / 0.2));
+  }
 
   @keyframes fade-up {
     from {

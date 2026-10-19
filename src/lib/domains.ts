@@ -73,6 +73,20 @@ export type Dominio = {
 
 export const DOMINIOS: Dominio[] = [
   {
+    key: "conformidade-legal",
+    label: "Horas Extras",
+    icone: ShieldCheck,
+    telas: [
+      {
+        key: "conformidade-legal",
+        label: "Conformidade legal",
+        href: "/dashboards/conformidade-legal",
+        palavrasChave: ["jornada", "interjornada", "ocorrencias", "folga", "ferias", "legal"],
+        icone: BarChart3,
+      },
+    ],
+  },
+  {
     key: "seguranca",
     label: "Segurança",
     icone: ShieldCheck,
@@ -143,7 +157,6 @@ export const DOMINIOS: Dominio[] = [
         href: "/dashboards/rh/absenteismo",
         palavrasChave: ["falta", "presenca", "ponto", "atestado"],
         icone: CalendarX,
-        emBreve: true,
       },
       {
         key: "turnover",
@@ -364,6 +377,10 @@ export const DOMINIOS: Dominio[] = [
   },
 ]
 
+/** Oculta módulos da navegação sem alterar as chaves de permissão existentes. */
+export const DOMINIOS_OCULTOS = new Set(["rh", "treinamentos", "financeiro", "epi"])
+export const DOMINIOS_NAVEGACAO = DOMINIOS.filter((dominio) => !DOMINIOS_OCULTOS.has(dominio.key))
+
 export type TelaComDominio = Tela & {
   dominioKey: string
   dominioLabel: string
@@ -453,7 +470,7 @@ function normalizar(texto: string): string {
 export function buscarTelas(termo: string): TelaComDominio[] {
   const alvo = normalizar(termo)
   if (!alvo) return []
-  return TODAS_AS_TELAS.filter((tela) => {
+  return TODAS_AS_TELAS.filter((tela) => !DOMINIOS_OCULTOS.has(tela.dominioKey) && tela.key !== "home").filter((tela) => {
     const campos = [tela.label, tela.dominioLabel, ...(tela.palavrasChave ?? [])]
     return campos.some((campo) => normalizar(campo).includes(alvo))
   })
@@ -477,7 +494,7 @@ export function sanitizarTelas(entrada: unknown): string[] {
   const validas = new Set(CHAVES_DE_TELA)
   return Array.from(
     new Set(
-      entrada.filter((v): v is string => typeof v === "string" && validas.has(v)),
+      entrada.filter((v): v is string => typeof v === "string" && (validas.has(v) || /^cliente-bi:[1-9]\d*$/.test(v) && Number.isSafeInteger(Number(v.slice(11))))),
     ),
   )
 }

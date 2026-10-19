@@ -2,14 +2,16 @@ import { describe, expect, it } from "vitest"
 import {
   buscarTelas,
   DOMINIOS,
+  DOMINIOS_NAVEGACAO,
   sanitizarTelas,
   telasVisiveis,
   TODAS_AS_TELAS,
 } from "./domains"
 
 describe("registro de dominios", () => {
-  it("registra os dominios da empresa, na ordem (5 internos + Clientes)", () => {
+  it("registra os dominios da empresa na ordem de navegação", () => {
     expect(DOMINIOS.map((d) => d.key)).toEqual([
+      "conformidade-legal",
       "seguranca",
       "rh",
       "qualidade",
@@ -42,12 +44,23 @@ describe("registro de dominios", () => {
 describe("buscarTelas", () => {
   it("encontra ignorando acento e caixa", () => {
     expect(buscarTelas("SEGURANCA").length).toBeGreaterThan(0)
-    expect(buscarTelas("competencias").length).toBeGreaterThan(0)
+    expect(buscarTelas("CONFORMIDADE").length).toBeGreaterThan(0)
   })
 
   it("encontra por palavra-chave, nao so pelo rotulo", () => {
-    const resultado = buscarTelas("vencimento")
-    expect(resultado.some((t) => t.key === "matriz-competencias")).toBe(true)
+    const resultado = buscarTelas("interjornada")
+    expect(resultado.some((t) => t.key === "conformidade-legal")).toBe(true)
+  })
+
+  it("oculta módulos e Home da descoberta sem remover permissões", () => {
+    expect(DOMINIOS_NAVEGACAO.map((d) => d.key)).toEqual(["conformidade-legal", "seguranca", "qualidade", "clientes"])
+    for (const termo of ["financeiro", "capacitacao", "headcount", "epi", "mission control"]) {
+      expect(buscarTelas(termo).every((t) => !["rh", "treinamentos", "financeiro", "epi", "geral"].includes(t.dominioKey))).toBe(true)
+    }
+    expect(TODAS_AS_TELAS.some((t) => t.key === "controle-quadro")).toBe(true)
+    const conformidade = DOMINIOS_NAVEGACAO.find((d) => d.key === "conformidade-legal")!
+    expect(conformidade.label).toBe("Horas Extras")
+    expect(conformidade.telas[0].label).toBe("Conformidade legal")
   })
 
   it("devolve vazio para termo sem correspondencia", () => {

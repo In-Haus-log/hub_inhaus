@@ -1,0 +1,3 @@
+BEGIN;
+ALTER TABLE dm_powerbi_painel ADD COLUMN IF NOT EXISTS documentacao text NOT NULL DEFAULT '';
+COMMIT;

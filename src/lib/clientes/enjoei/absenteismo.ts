@@ -1,11 +1,15 @@
 import { inhausPool } from "@/lib/db-inhaus"
 import { assertLinhasNoEscopo, type EscopoDados } from "@/lib/seguranca/escopo-dados"
+import { VINCULOS_PONTO_SQL, condicaoCorteDesligamentoSql } from "@/lib/ponto-desligamento"
 
 /** CR único do portal Enjoei (valor bruto da coluna `cr`). Ponto único de manutenção. */
 export const CR_ENJOEI = "68732 - SP - LOG - ENJOEI - CABREUVA"
 
 /** Escopo fail-closed do portal Enjoei: apenas o código de CR 68732. */
 const ESCOPO_ENJOEI: EscopoDados = { tipo: "lista", crs: ["68732"] }
+
+/** Corte inclusivo por matrícula e CR, compartilhado com o painel geral. */
+const CONDICAO_CORTE_DESLIGAMENTO_SQL = condicaoCorteDesligamentoSql()
 
 /**
  * Leitura do ponto real da Enjoei (tabela public.ft_ponto_smartcontrol no
@@ -149,10 +153,13 @@ type Linha = {
 /** Meses (YYYY-MM) presentes na coluna `data`, do mais recente para o mais antigo. */
 export async function getMesesDisponiveis(): Promise<string[]> {
   const { rows } = await inhausPool.query<{ mes: string }>(
-    `select distinct to_char(data, 'YYYY-MM') as mes
-       from public.ft_ponto_smartcontrol
-      where cr = $1
-        and data <= $2
+    `with ${VINCULOS_PONTO_SQL}
+    select distinct to_char(p.data, 'YYYY-MM') as mes
+       from public.ft_ponto_smartcontrol p
+
+      where p.cr = $1
+        and p.data <= $2
+      ${CONDICAO_CORTE_DESLIGAMENTO_SQL}
       order by mes desc`,
     [CR_ENJOEI, getMaxAllowedDate()],
   )
@@ -161,17 +168,20 @@ export async function getMesesDisponiveis(): Promise<string[]> {
 
 export async function getHeadcount(mes: string): Promise<Headcount> {
   const { rows } = await inhausPool.query<Linha>(
-    `select colaborador,
-            to_char(data, 'YYYY-MM-DD') as iso,
-            entrada,
-            h_contratual,
-            motivo_abono_dispensa,
-            cr
-       from public.ft_ponto_smartcontrol
-      where to_char(data, 'YYYY-MM') = $1
-        and cr = $2
-        and data <= $3
-      order by colaborador, data`,
+    `with ${VINCULOS_PONTO_SQL}
+    select p.colaborador,
+            to_char(p.data, 'YYYY-MM-DD') as iso,
+            p.entrada,
+            p.h_contratual,
+            p.motivo_abono_dispensa,
+            p.cr
+       from public.ft_ponto_smartcontrol p
+
+      where to_char(p.data, 'YYYY-MM') = $1
+        and p.cr = $2
+        and p.data <= $3
+      ${CONDICAO_CORTE_DESLIGAMENTO_SQL}
+      order by p.colaborador, p.data`,
     [mes, CR_ENJOEI, getMaxAllowedDate()],
   )
   assertLinhasNoEscopo(rows, (r) => r.cr, ESCOPO_ENJOEI)
@@ -249,17 +259,23 @@ export async function getPresencasTimeline(mes: string): Promise<PresencasTimeli
     iso: string
     presentes: string
     faltas: string
+    cr: string
   }>(
-    `select to_char(data, 'YYYY-MM-DD') as iso,
-            count(*) filter (where entrada ~ '^[0-9]{1,2}:[0-9]{2}') as presentes,
-            count(*) filter (where upper(trim(entrada)) = 'FALTA') as faltas
-       from public.ft_ponto_smartcontrol
-      where to_char(data, 'YYYY-MM') = $1
-        and cr = $2
-        and data <= $3
-      group by 1`,
+    `with ${VINCULOS_PONTO_SQL}
+    select to_char(p.data, 'YYYY-MM-DD') as iso,
+            p.cr,
+            count(*) filter (where p.entrada ~ '^[0-9]{1,2}:[0-9]{2}') as presentes,
+            count(*) filter (where upper(trim(p.entrada)) = 'FALTA') as faltas
+       from public.ft_ponto_smartcontrol p
+
+      where to_char(p.data, 'YYYY-MM') = $1
+        and p.cr = $2
+        and p.data <= $3
+      ${CONDICAO_CORTE_DESLIGAMENTO_SQL}
+      group by 1, p.cr`,
     [mes, CR_ENJOEI, getMaxAllowedDate()],
   )
+  assertLinhasNoEscopo(rows, (r) => r.cr, ESCOPO_ENJOEI)
   const porIso = new Map(rows.map((r) => [r.iso, r]))
 
   const [anoStr, mesStr] = mes.split("-")

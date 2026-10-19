@@ -1,4 +1,7 @@
-import Link from "next/link"
+"use client"
+
+import { useState } from "react"
+import { ModalPec } from "./ModalPec"
 
 import { moeda, nomeDoPec, percentual } from "@/components/flash/moeda"
 import { SeloStatus } from "@/components/flash/SeloStatus"
@@ -20,20 +23,20 @@ function Celulas({ rol, mc, margem }: { rol: number | null; mc: number | null; m
   )
 }
 
-function LinhaDoPec({ p, periodo }: { p: LinhaPec; periodo: Periodo }) {
+function LinhaDoPec({ p, onOpen }: { p: LinhaPec; onOpen: (pec: LinhaPec) => void }) {
   const mc = mcDe(p)
   const margem = p.rol != null && p.rol !== 0 && mc != null ? mc / p.rol : null
   return (
     <tr className="relative border-t border-navy/5 transition hover:bg-teal-tint/50 focus-within:bg-teal-tint/50">
       <th scope="row" className="px-4 py-3 text-left font-normal">
-        <Link
-          href={`/dashboards/financeiro/projecoes/${p.pecCod}?mes=${periodo.mes}&semana=${periodo.semana}`}
-          className="block font-medium text-navy after:absolute after:inset-0 focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-inset focus-visible:after:ring-teal"
+        <button
+          type="button" onClick={() => onOpen(p)} aria-label={`Parametrizar PEC ${p.pecCod} — ${nomeDoPec(p.pecNome)}`}
+          className="block text-left font-medium text-navy after:absolute after:inset-0 focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-inset focus-visible:after:ring-teal"
         >
           {tituloNome(nomeDoPec(p.pecNome))}
-        </Link>
+        </button>
         <span className="text-xs text-muted-foreground">
-          PEC {p.pecCod} · CR {p.crCod}
+          PEC {p.pecCod} · {(p.crs?.length ?? 1) > 1 ? `${p.crs!.length} CRs` : `CR ${p.crCod}`}
           {p.gerente ? ` · ${tituloNome(p.gerente)}` : ""}
         </span>
       </th>
@@ -59,7 +62,9 @@ function CabecalhoDoGrupo({ g }: { g: Grupo }) {
 
 /** Lista de PECs (uma linha por PEC) ou de grupos com os PECs dentro. Clique na linha → parametrização. */
 export function ListaPecs({ grupos, dim, periodo }: { grupos: Grupo[]; dim: DimVisao; periodo: Periodo }) {
+  const [selecionado, setSelecionado] = useState<LinhaPec | null>(null)
   return (
+    <>
     <div className="glass overflow-x-auto rounded-3xl">
       <table className="w-full text-sm">
         <caption className="sr-only">Projeção por contrato: ROL, MC e % Margem</caption>
@@ -76,11 +81,13 @@ export function ListaPecs({ grupos, dim, periodo }: { grupos: Grupo[]; dim: DimV
           <tbody key={g.chave}>
             {dim !== "pec" && <CabecalhoDoGrupo g={g} />}
             {g.pecs.map((p) => (
-              <LinhaDoPec key={p.pecCod} p={p} periodo={periodo} />
+              <LinhaDoPec key={p.pecCod} p={p} onOpen={setSelecionado} />
             ))}
           </tbody>
         ))}
       </table>
     </div>
+    <ModalPec pec={selecionado} periodo={periodo} onClose={() => setSelecionado(null)} />
+    </>
   )
 }

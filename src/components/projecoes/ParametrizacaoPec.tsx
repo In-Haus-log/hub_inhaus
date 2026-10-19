@@ -1,298 +1,87 @@
 "use client"
 
-import { useMemo, useRef, useState } from "react"
+import { useEffect, useId, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
-import { Loader2, Pencil, Plus, Power, X } from "lucide-react"
-
-import { moeda } from "@/components/flash/moeda"
-import { Combobox } from "@/components/ui/Combobox"
-import { TIPOS, TIPOS_POR_NATUREZA, valorLinha, type Item, type Natureza, type TipoItem } from "@/lib/flash/calculos"
-import { formatarNumero } from "@/lib/format"
+import { Loader2, Pencil, Plus, Power } from "lucide-react"
+import { valorLinha, type Item, type Natureza } from "@/lib/flash/calculos"
+import { ABAS, abaDoItem, numeroEntrada, numeroTexto, tipoDaAba, unidadeDoItem, valorUnitarioTexto, type Aba } from "@/lib/projecoes/abas"
 import { cn } from "@/lib/utils"
 
-/**
- * Parametrização do PEC: itens de RECEITA e de CUSTO, cada um com o seu CR.
- * Cadastro em sequência pelo teclado: Enter no formulário salva e devolve o foco à descrição.
- */
-
-type Cr = { cr: string; nome: string }
-type Form = { descricao: string; natureza: Natureza; tipo: TipoItem; valorUnitario: string; qtdPadrao: string; crCod: string; agrupador: string }
-
-const ROTULO_QTD: Record<TipoItem, string> = {
-  PESSOAS: "Pessoas", UNITARIO: "Quantidade", HORA_EXTRA: "Horas", DESCONTO: "Quantidade", FIXO: "Quantidade", TAXA: "Quantidade", VARIAVEL: "Quantidade",
+const campo = "h-10 w-full rounded-xl border border-navy/15 bg-white px-3 text-sm text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40"
+const botao = "rounded-xl border border-navy/15 px-4 py-2 text-sm text-navy disabled:opacity-50"
+type Form = { descricao: string; natureza: Natureza; crCod: string; area: string; turno: string; unidade: string; remuneracao: "FIXO" | "VARIAVEL"; valor: string; qtd: string }
+export function AbasPec({ aba, onChange, itens, disabled = false }: { aba: Aba; onChange: (a: Aba) => void; itens: Item[]; disabled?: boolean }) {
+  return <div role="tablist" aria-label="Composição do contrato" className="mb-5 flex overflow-x-auto border-b border-navy/15">
+    {ABAS.map((a, i) => <button key={a} type="button" role="tab" aria-selected={aba === a} tabIndex={aba === a ? 0 : -1} disabled={disabled}
+      onKeyDown={e => { if (disabled) return; const next = e.key === "ArrowRight" ? (i + 1) % 4 : e.key === "ArrowLeft" ? (i + 3) % 4 : e.key === "Home" ? 0 : e.key === "End" ? 3 : -1; if (next >= 0) { e.preventDefault(); onChange(ABAS[next]); (e.currentTarget.parentElement?.children[next] as HTMLButtonElement)?.focus() } }}
+      onClick={() => onChange(a)} className={cn("shrink-0 rounded-t-xl border-b-2 px-4 py-3 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-teal", aba === a ? "border-teal bg-teal-tint text-teal" : "border-transparent text-muted-foreground hover:bg-navy-mist hover:text-navy")}>
+      {a}<span className="ml-2 text-xs tabular-nums">{itens.filter(i => i.ativo && abaDoItem(i) === a).length}</span>
+    </button>)}
+  </div>
 }
-const ROTULO_VALOR: Record<TipoItem, string> = {
-  PESSOAS: "Valor por pessoa/mês", UNITARIO: "Valor unitário", HORA_EXTRA: "Valor da hora", DESCONTO: "Valor do desconto",
-  FIXO: "Valor mensal", TAXA: "Valor da taxa", VARIAVEL: "Valor variável",
-}
-const NATUREZAS: { valor: Natureza; rotulo: string }[] = [
-  { valor: "RECEITA", rotulo: "Receita" },
-  { valor: "CUSTO", rotulo: "Custo" },
-]
 
-const num = (t: string) => Number(t.replace(/\./g, "").replace(",", "."))
-const campo =
-  "h-10 w-full rounded-xl border border-navy/15 bg-white px-3 text-sm text-navy outline-none transition focus-visible:border-teal focus-visible:ring-2 focus-visible:ring-teal/30"
-
-export function ParametrizacaoPec({ pecCod, crPadrao, itens, crs }: { pecCod: string; crPadrao: string; itens: Item[]; crs: Cr[] }) {
+export function ParametrizacaoPec({ pecCod, crPadrao, itens, crs, podeEditar = true, onBusy, onDirty }: { pecCod: string; crPadrao: string; itens: Item[]; crs: { cr: string; nome: string }[]; podeEditar?: boolean; onBusy?: (b: boolean) => void; onDirty?: (b: boolean) => void }) {
   const router = useRouter()
-  const vazio: Form = { descricao: "", natureza: "RECEITA", tipo: "PESSOAS", valorUnitario: "", qtdPadrao: "", crCod: crPadrao, agrupador: "" }
-  const [form, setForm] = useState<Form>(vazio)
+  const id = useId()
+  const [lista, setLista] = useState(itens)
+  const [aba, setAba] = useState<Aba>("Pessoas")
   const [editando, setEditando] = useState<number | null>(null)
-  const [erro, setErro] = useState<string | null>(null)
-  const [salvando, setSalvando] = useState(false)
+  const [form, setForm] = useState<Form | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [erro, setErro] = useState("")
+  const [aviso, setAviso] = useState("")
   const descricaoRef = useRef<HTMLInputElement>(null)
-
-  const opcoesCr = useMemo(() => crs.map((c) => ({ value: c.cr, label: `${c.cr} · ${c.nome}` })), [crs])
-  const nomeCr = useMemo(() => new Map(crs.map((c) => [c.cr, c.nome])), [crs])
-  const agrupadores = useMemo(() => [...new Set(itens.map((i) => i.agrupador).filter(Boolean))] as string[], [itens])
-  const base = `/api/flash/pecs/${pecCod}/itens`
-
-  function trocarNatureza(natureza: Natureza) {
-    setForm((f) => ({ ...f, natureza, tipo: TIPOS_POR_NATUREZA[natureza].includes(f.tipo) ? f.tipo : TIPOS_POR_NATUREZA[natureza][0] }))
+  useEffect(() => { setLista(itens) }, [itens])
+  const base = `/api/flash/pecs/${encodeURIComponent(pecCod)}/itens`
+  function mudarBusy(b: boolean) { setBusy(b); onBusy?.(b) }
+  function cancelar() { setForm(null); setEditando(null); setErro(""); onDirty?.(false) }
+  function trocar(a: Aba) { if (form && !window.confirm("Descartar o item ainda não salvo?")) return; cancelar(); setAba(a) }
+  function novo() {
+    setEditando(null); setErro(""); setAviso(""); onDirty?.(true)
+    setForm({ descricao: "", natureza: "RECEITA", crCod: crPadrao, area: "", turno: "", unidade: aba === "Pessoas" ? "Pessoas" : aba === "Hora Extra" ? "Horas" : "Unidades", remuneracao: aba === "Pessoas" ? "FIXO" : "VARIAVEL", valor: "", qtd: "" })
   }
-
   function editar(i: Item) {
-    setEditando(i.id)
-    setErro(null)
-    setForm({
-      descricao: i.descricao,
-      natureza: i.natureza,
-      tipo: i.tipo,
-      valorUnitario: formatarNumero(i.valorUnitario, 2).replace(/\./g, ""),
-      qtdPadrao: formatarNumero(i.qtdPadrao, Number.isInteger(i.qtdPadrao) ? 0 : 2).replace(/\./g, ""),
-      crCod: i.crCod,
-      agrupador: i.agrupador ?? "",
-    })
-    descricaoRef.current?.focus()
+    if (form && !window.confirm("Descartar o item ainda não salvo?")) return
+    setEditando(i.id); setErro(""); setAviso(""); onDirty?.(true)
+    setForm({ descricao: i.descricao, natureza: i.natureza, crCod: i.crCod, area: [i.agrupador, i.parametros?.turno].filter(Boolean).join(" / "), turno: "", unidade: unidadeDoItem(i), remuneracao: i.parametros?.remuneracao ?? (i.tipo === "FIXO" || i.tipo === "PESSOAS" ? "FIXO" : "VARIAVEL"), valor: numeroTexto(i.valorUnitario), qtd: numeroTexto(i.qtdPadrao) })
   }
-
-  function cancelar() {
-    setEditando(null)
-    setForm(vazio)
-    setErro(null)
-  }
-
   async function salvar(e: React.FormEvent) {
-    e.preventDefault()
-    setErro(null)
-    const ordemAtual = editando ? itens.find((i) => i.id === editando)?.ordem ?? 0 : itens.length
-    setSalvando(true)
-    const r = await fetch(editando ? `${base}/${editando}` : base, {
-      method: editando ? "PUT" : "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        descricao: form.descricao,
-        natureza: form.natureza,
-        tipo: form.tipo,
-        valorUnitario: num(form.valorUnitario || "x"),
-        qtdPadrao: form.tipo === "FIXO" && !form.qtdPadrao ? 1 : num(form.qtdPadrao || "0"),
-        crCod: form.crCod,
-        agrupador: form.agrupador || null,
-        ordem: ordemAtual,
-      }),
-    })
-    setSalvando(false)
-    if (!r.ok) return setErro((await r.json()).error ?? "Falha ao salvar.")
-    setEditando(null)
-    setForm((f) => ({ ...vazio, natureza: f.natureza, tipo: f.tipo, crCod: f.crCod, agrupador: f.agrupador }))
-    router.refresh()
-    descricaoRef.current?.focus()
+    e.preventDefault(); if (!form || busy) return
+    if (!crs.some(c => c.cr === form.crCod)) { setErro("Selecione um CR disponível para este PEC."); return }
+    const adicionarOutro = (e.nativeEvent as SubmitEvent).submitter?.getAttribute("data-next") === "true"
+    if (!form.area.trim()) { setErro("Informe Área / Turno."); return }
+    const valorUnitario = numeroEntrada(form.valor), qtdPadrao = aba === "Hora Extra" && form.unidade === "Verba" ? 1 : numeroEntrada(form.qtd)
+    if (!Number.isFinite(valorUnitario) || !Number.isFinite(qtdPadrao)) { setErro("Preencha o valor e a quantidade com números válidos, sem separador de milhar."); return }
+    if (form.unidade === "Pessoas" && !Number.isInteger(qtdPadrao)) { setErro("A quantidade de pessoas deve ser inteira."); return }
+    mudarBusy(true); setErro("")
+    try {
+      const r = await fetch(`${editando ? `${base}/${editando}` : base}?regional=lucas`, { method: editando ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ descricao: form.descricao, natureza: aba === "Glosas" ? "RECEITA" : form.natureza, tipo: tipoDaAba(aba, form.unidade), crCod: form.crCod, agrupador: form.area.trim(), valorUnitario, qtdPadrao, ordem: lista.find(i => i.id === editando)?.ordem ?? lista.length, parametros: { aba, unidadeMedida: form.unidade, remuneracao: form.remuneracao, turno: null } }) })
+      const d = await r.json(); if (!r.ok) throw new Error(d.error ?? "Não foi possível salvar o item.")
+      setLista(l => editando ? l.map(i => i.id === editando ? d : i) : [...l, d]); cancelar(); if (adicionarOutro) { setForm({ ...form, descricao: "", valor: "", qtd: form.unidade === "Verba" ? "1" : "" }); onDirty?.(true); requestAnimationFrame(() => descricaoRef.current?.focus()) } setAviso("Item salvo."); router.refresh()
+    } catch (e) { setErro(e instanceof Error ? e.message : "Falha ao salvar.") } finally { mudarBusy(false) }
   }
-
-  async function alternarAtivo(i: Item) {
-    if (i.ativo && !confirm("O item sai das próximas semanas; semanas já enviadas não mudam. Desativar?")) return
-    const r = await fetch(`${base}/${i.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ativo: !i.ativo }),
-    })
-    if (!r.ok) return setErro((await r.json()).error ?? "Falha ao atualizar.")
-    router.refresh()
+  async function ativar(i: Item) {
+    if (busy || !window.confirm(`${i.ativo ? "Desativar" : "Reativar"} ${i.descricao}?`)) return
+    mudarBusy(true); setErro("")
+    try { const r = await fetch(`${base}/${i.id}?regional=lucas`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ativo: !i.ativo }) }); if (!r.ok) { const d = await r.json(); throw new Error(d.error ?? "Falha ao atualizar item.") } setLista(l => l.map(a => a.id === i.id ? { ...a, ativo: !a.ativo } : a)); router.refresh() }
+    catch (e) { setErro(e instanceof Error ? e.message : "Falha ao atualizar.") } finally { mudarBusy(false) }
   }
-
-  const secoes: { natureza: Natureza; titulo: string; vazioTxt: string }[] = [
-    { natureza: "RECEITA", titulo: "Receitas", vazioTxt: "Nenhuma receita cadastrada. Comece pelas funções do contrato (tarifa × pessoas)." },
-    { natureza: "CUSTO", titulo: "Custos", vazioTxt: "Nenhum custo cadastrado. Inclua hora extra, taxas e variáveis do contrato." },
-  ]
-
-  return (
-    <div className="space-y-5">
-      <form onSubmit={salvar} className="glass space-y-4 rounded-3xl p-5" aria-labelledby="titulo-form-item">
-        <div className="flex items-center justify-between gap-3">
-          <h2 id="titulo-form-item" className="font-display text-base font-semibold text-navy">
-            {editando ? "Editar item" : "Novo item"}
-          </h2>
-          {editando && (
-            <button type="button" onClick={cancelar} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal">
-              <X className="h-4 w-4" aria-hidden /> Cancelar edição
-            </button>
-          )}
-        </div>
-
-        <fieldset>
-          <legend className="mb-2 text-xs font-medium text-muted-foreground">O que é</legend>
-          <div role="radiogroup" className="inline-flex rounded-2xl border border-navy/10 bg-white/70 p-1">
-            {NATUREZAS.map((n) => (
-              <button
-                key={n.valor}
-                type="button"
-                role="radio"
-                aria-checked={form.natureza === n.valor}
-                onClick={() => trocarNatureza(n.valor)}
-                className={cn(
-                  "rounded-xl px-4 py-1.5 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal",
-                  form.natureza === n.valor ? "bg-inhaus-grad text-white shadow-glow" : "text-navy hover:bg-navy-mist",
-                )}
-              >
-                {n.rotulo}
-              </button>
-            ))}
-          </div>
-        </fieldset>
-
-        <fieldset>
-          <legend className="mb-2 text-xs font-medium text-muted-foreground">Como é {form.natureza === "CUSTO" ? "lançado" : "cobrado"}</legend>
-          <div role="radiogroup" className="flex flex-wrap gap-2">
-            {TIPOS_POR_NATUREZA[form.natureza].map((t) => (
-              <button
-                key={t}
-                type="button"
-                role="radio"
-                aria-checked={form.tipo === t}
-                onClick={() => setForm((f) => ({ ...f, tipo: t }))}
-                className={cn(
-                  "rounded-full border px-3.5 py-1.5 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal",
-                  form.tipo === t ? "border-transparent bg-inhaus-grad text-white shadow-glow" : "border-navy/15 bg-white/70 text-navy hover:border-teal/40",
-                )}
-              >
-                {TIPOS[t].rotulo}
-              </button>
-            ))}
-          </div>
-        </fieldset>
-
-        <div className="grid gap-3 md:grid-cols-12">
-          <label className="md:col-span-4">
-            <span className="mb-1.5 block text-xs font-medium text-muted-foreground">Descrição</span>
-            <input
-              ref={descricaoRef}
-              required
-              value={form.descricao}
-              onChange={(e) => setForm({ ...form, descricao: e.target.value })}
-              placeholder={form.natureza === "CUSTO" ? "Ex.: Hora extra 50% — separação" : form.tipo === "PESSOAS" ? "Ex.: Separador 1º turno" : "Ex.: Locação de caminhão"}
-              className={campo}
-            />
-          </label>
-          <label className="md:col-span-2">
-            <span className="mb-1.5 block text-xs font-medium text-muted-foreground">{ROTULO_VALOR[form.tipo]} (R$)</span>
-            <input required inputMode="decimal" value={form.valorUnitario} onChange={(e) => setForm({ ...form, valorUnitario: e.target.value })} placeholder="0,00" className={cn(campo, "text-right tabular-nums")} />
-          </label>
-          <label className="md:col-span-2">
-            <span className="mb-1.5 block text-xs font-medium text-muted-foreground">{ROTULO_QTD[form.tipo]} padrão</span>
-            <input inputMode="decimal" value={form.qtdPadrao} onChange={(e) => setForm({ ...form, qtdPadrao: e.target.value })} placeholder={form.tipo === "FIXO" ? "1" : "0"} className={cn(campo, "text-right tabular-nums")} />
-          </label>
-          <label className="md:col-span-2">
-            <span className="mb-1.5 block text-xs font-medium text-muted-foreground">Área (opcional)</span>
-            <input list="agrupadores-pec" value={form.agrupador} onChange={(e) => setForm({ ...form, agrupador: e.target.value })} placeholder="Ex.: A220" className={campo} />
-            <datalist id="agrupadores-pec">
-              {agrupadores.map((a) => (
-                <option key={a} value={a} />
-              ))}
-            </datalist>
-          </label>
-          <div className="flex items-end md:col-span-2">
-            <button
-              type="submit"
-              disabled={salvando}
-              className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-inhaus-grad px-4 text-sm font-semibold text-white shadow-glow transition hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal focus-visible:ring-offset-2 disabled:opacity-60"
-            >
-              {salvando ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Plus className="h-4 w-4" aria-hidden />}
-              {editando ? "Salvar" : "Adicionar"}
-            </button>
-          </div>
-          <div className="md:col-span-6">
-            <span className="mb-1.5 block text-xs font-medium text-muted-foreground">CR do item</span>
-            <Combobox
-              value={form.crCod}
-              onChange={(v) => setForm((f) => ({ ...f, crCod: v ?? f.crCod }))}
-              options={opcoesCr}
-              placeholder="Busque pelo código ou nome do CR"
-              ariaLabel="CR do item"
-            />
-          </div>
-        </div>
-        {erro && (
-          <p role="alert" className="text-sm text-red-700">
-            {erro}
-          </p>
-        )}
-      </form>
-
-      {secoes.map((s) => {
-        const lista = itens.filter((i) => i.natureza === s.natureza)
-        return (
-          <section key={s.natureza} aria-labelledby={`secao-${s.natureza}`} className="space-y-2">
-            <h2 id={`secao-${s.natureza}`} className="font-display text-base font-semibold text-navy">
-              {s.titulo} <span className="text-sm font-normal text-muted-foreground">({lista.filter((i) => i.ativo).length})</span>
-            </h2>
-            {lista.length === 0 ? (
-              <p className="glass rounded-3xl p-6 text-center text-sm text-muted-foreground">{s.vazioTxt}</p>
-            ) : (
-              <div className="glass overflow-x-auto rounded-3xl">
-                <table className="w-full text-sm">
-                  <caption className="sr-only">Itens de {s.titulo.toLowerCase()} do PEC</caption>
-                  <thead>
-                    <tr className="text-left text-xs text-muted-foreground">
-                      <th scope="col" className="px-5 py-3 font-medium">Item</th>
-                      <th scope="col" className="px-3 py-3 font-medium">Tipo</th>
-                      <th scope="col" className="px-3 py-3 text-right font-medium">Valor unit.</th>
-                      <th scope="col" className="px-3 py-3 text-right font-medium">Qtd. padrão</th>
-                      <th scope="col" className="px-3 py-3 text-right font-medium">Mês (padrão)</th>
-                      <th scope="col" className="px-3 py-3 font-medium">CR</th>
-                      <th scope="col" className="px-5 py-3 text-right font-medium">
-                        <span className="sr-only">Ações</span>
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {lista.map((i) => (
-                      <tr key={i.id} className={cn("border-t border-navy/5", !i.ativo && "opacity-50", editando === i.id && "bg-teal-tint/60")}>
-                        <th scope="row" className="px-5 py-2.5 text-left font-normal text-navy">
-                          {i.descricao}
-                          {i.agrupador && <span className="ml-2 text-xs text-muted-foreground">{i.agrupador}</span>}
-                          {!i.ativo && <span className="ml-2 text-xs text-muted-foreground">(inativo)</span>}
-                        </th>
-                        <td className="px-3 py-2.5 text-muted-foreground">{TIPOS[i.tipo].rotulo}</td>
-                        <td className="px-3 py-2.5 text-right tabular-nums">{formatarNumero(i.valorUnitario, 2)}</td>
-                        <td className="px-3 py-2.5 text-right tabular-nums">{formatarNumero(i.qtdPadrao, Number.isInteger(i.qtdPadrao) ? 0 : 2)}</td>
-                        <td className="px-3 py-2.5 text-right tabular-nums text-navy">{moeda(valorLinha(i.tipo, i.valorUnitario, i.qtdPadrao), 2)}</td>
-                        <td className="px-3 py-2.5 text-xs text-muted-foreground" title={nomeCr.get(i.crCod)}>
-                          {i.crCod}
-                          {nomeCr.get(i.crCod) ? ` · ${nomeCr.get(i.crCod)}` : ""}
-                        </td>
-                        <td className="whitespace-nowrap px-5 py-2.5 text-right">
-                          <button type="button" onClick={() => editar(i)} aria-label={`Editar ${i.descricao}`} className="rounded-lg p-1.5 text-navy hover:bg-navy-mist focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal">
-                            <Pencil className="h-4 w-4" aria-hidden />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => alternarAtivo(i)}
-                            aria-label={`${i.ativo ? "Desativar" : "Reativar"} ${i.descricao}`}
-                            className={cn("rounded-lg p-1.5 hover:bg-navy-mist focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal", i.ativo ? "text-red-700" : "text-teal")}
-                          >
-                            <Power className="h-4 w-4" aria-hidden />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </section>
-        )
-      })}
-    </div>
-  )
+  const visiveis = lista.filter(i => abaDoItem(i) === aba && i.ativo)
+  function input(key: keyof Form, label: string, numeric = false) {
+    return <label className="block text-xs font-medium text-navy" htmlFor={`${id}-${key}`}>{label}<input id={`${id}-${key}`} className={`${campo} mt-1.5`} value={form?.[key] ?? ""} inputMode={numeric ? "decimal" : undefined} maxLength={numeric ? 24 : key === "descricao" ? 120 : 60} ref={key === "descricao" ? descricaoRef : undefined} autoFocus={key === "descricao"} required={key === "descricao" || key === "area" || numeric} onChange={e => setForm(f => f && ({ ...f, [key]: e.target.value }))} /></label>
+  }
+  return <div>
+    <AbasPec aba={aba} onChange={trocar} itens={lista} disabled={busy} />
+    <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><h3 className="font-display text-base font-semibold text-navy">{aba === "Pessoas" ? "Funções e postos" : aba === "Hora Extra" ? "Horas por área e turno" : aba === "Variáveis" ? "Serviços e adicionais" : "Descontos do contrato"}</h3><div className="flex items-center gap-4">{podeEditar && <button type="button" disabled={busy || !!form} onClick={novo} className="flex items-center gap-2 rounded-xl bg-inhaus-grad px-4 py-2 text-sm text-white shadow-glow disabled:opacity-50"><Plus className="h-4 w-4" />Adicionar item</button>}</div></div>
+    {erro && <p role="alert" className="mb-4 text-sm text-red-700">{erro}</p>}<p role="status" className="text-sm text-teal">{aviso}</p>
+    {form && <form onSubmit={salvar} className="mb-5 space-y-4 rounded-2xl border border-navy/10 bg-navy-mist/40 p-4"><fieldset disabled={busy} className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="sm:col-span-2">{input("descricao", aba === "Pessoas" ? "Função / posto" : aba === "Glosas" ? "Motivo da glosa" : "Descrição")}</div>
+      <label className="text-xs font-medium text-navy">CR *<input className={`${campo} mt-1.5`} required pattern="[A-Za-z0-9]{5}" maxLength={5} list={`${id}-crs`} value={form.crCod} onChange={e => setForm({ ...form, crCod: e.target.value.toUpperCase() })} /><datalist id={`${id}-crs`}>{crs.filter(c => c.cr.startsWith(form.crCod)).slice(0, 50).map(c => <option key={c.cr} value={c.cr}>{c.nome}</option>)}</datalist><span className="mt-1 block truncate text-xs font-normal text-muted-foreground" title={crs.find(c => c.cr === form.crCod)?.nome}>{crs.find(c => c.cr === form.crCod)?.nome}</span></label>
+      {input("area", "Área / Turno *")}
+      <label className="text-xs font-medium text-navy">{aba === "Hora Extra" ? "Forma de lançamento" : "Unidade de medida"}<select className={`${campo} mt-1.5`} value={form.unidade} onChange={e => setForm({ ...form, unidade: e.target.value, qtd: e.target.value === "Verba" ? "1" : "" })}>{(aba === "Pessoas" ? ["Pessoas", "Dias", "Postos"] : aba === "Hora Extra" ? ["Horas", "Verba"] : aba === "Glosas" ? ["Horas", "Dias", "Ocorrências", "Verba", "Unidades"] : ["Peças", "Unidades", "Viagens", "Dias", "Horas", "Verba"]).map(u => <option key={u} value={u}>{aba === "Hora Extra" ? u === "Horas" ? "Por horas" : "Valor consolidado" : u}</option>)}{!["Pessoas", "Dias", "Postos", "Horas", "Verba", "Ocorrências", "Unidades", "Peças", "Viagens"].includes(form.unidade) && <option>{form.unidade}</option>}</select></label>
+      {aba !== "Hora Extra" && <label className="text-xs font-medium text-navy">Fixo ou variável<select className={`${campo} mt-1.5`} value={form.remuneracao} onChange={e => setForm({ ...form, remuneracao: e.target.value as Form["remuneracao"] })}><option value="FIXO">Fixo</option><option value="VARIAVEL">Variável</option></select></label>}
+      {input("valor", aba === "Hora Extra" ? form.unidade === "Horas" ? "Valor da hora (R$)" : "Valor consolidado (R$)" : "Valor unitário (R$)", true)}{!(aba === "Hora Extra" && form.unidade === "Verba") && input("qtd", aba === "Hora Extra" ? "Quantidade de horas" : `Quantidade padrão (${form.unidade.toLowerCase()})`, true)}
+    </fieldset><div className="flex flex-wrap items-center justify-end gap-3"><span className="mr-auto text-sm text-navy">Total padrão: <strong>{Number.isFinite(numeroEntrada(form.valor)) && Number.isFinite(numeroEntrada(form.unidade === "Verba" && aba === "Hora Extra" ? "1" : form.qtd)) ? valorUnitarioTexto(valorLinha(tipoDaAba(aba, form.unidade), numeroEntrada(form.valor), aba === "Hora Extra" && form.unidade === "Verba" ? 1 : numeroEntrada(form.qtd))) : "—"}</strong></span><button type="button" disabled={busy} className={botao} onClick={cancelar}>Cancelar</button><button disabled={busy} className={botao}>{busy && <Loader2 className="mr-2 inline h-4 w-4 animate-spin" />}Salvar item</button>{!editando && <button disabled={busy} data-next="true" className="rounded-xl bg-inhaus-grad px-4 py-2 text-sm text-white disabled:opacity-50">Salvar e adicionar outro</button>}</div></form>}
+    <div className="overflow-x-auto rounded-2xl border border-navy/10"><table className="w-full min-w-[760px] text-sm"><caption className="sr-only">Itens de {aba.toLowerCase()} do contrato</caption><thead className="bg-navy-mist/70 text-xs text-muted-foreground"><tr>{[aba === "Pessoas" ? "Função / posto" : aba === "Glosas" ? "Motivo" : "Descrição", "CR", "Área / Turno", "Fixo / variável", "Unidade", "Valor unit.", "Qtd. padrão", "Total padrão", "Ações"].map(c => <th key={c} scope="col" className="whitespace-nowrap px-3 py-3 text-left font-medium">{c}</th>)}</tr></thead><tbody>{visiveis.map(i => <tr key={i.id} className={cn("border-t border-navy/5", !i.ativo && "opacity-60")}><td className="px-3 py-3 font-medium text-navy">{i.descricao}{!i.ativo && <span className="ml-2 text-xs">Inativo</span>}</td><td className="px-3 py-3">{i.crCod}</td><td className="px-3 py-3">{[i.agrupador, i.parametros?.turno].filter(Boolean).join(" / ") || "Pendente"}</td><td className="px-3 py-3">{i.parametros?.remuneracao === "VARIAVEL" || (!i.parametros && i.tipo !== "FIXO" && i.tipo !== "PESSOAS") ? "Variável" : "Fixo"}</td><td className="px-3 py-3">{unidadeDoItem(i)}</td><td className="px-3 py-3 text-right tabular-nums">{valorUnitarioTexto(i.valorUnitario)}</td><td className="px-3 py-3 text-right tabular-nums">{numeroTexto(i.qtdPadrao)}</td><td className="px-3 py-3 text-right tabular-nums">{valorUnitarioTexto(valorLinha(i.tipo, i.valorUnitario, i.qtdPadrao))}</td><td className="px-3 py-3">{podeEditar && <div className="flex gap-2"><button disabled={busy || !!form} aria-label={`Editar ${i.descricao}`} title="Editar" className="rounded-lg p-2 text-teal hover:bg-teal-tint disabled:opacity-50" onClick={() => editar(i)}><Pencil className="h-4 w-4" /></button><button disabled={busy || !!form} aria-label={`${i.ativo ? "Desativar" : "Reativar"} ${i.descricao}`} title={i.ativo ? "Desativar" : "Reativar"} className="rounded-lg p-2 text-muted-foreground hover:bg-navy-mist disabled:opacity-50" onClick={() => ativar(i)}><Power className="h-4 w-4" /></button></div>}</td></tr>)}</tbody></table>{!visiveis.length && <p className="px-4 py-10 text-center text-sm text-muted-foreground">Nenhum item em {aba.toLowerCase()}.</p>}</div>
+  </div>
 }

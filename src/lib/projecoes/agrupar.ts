@@ -16,6 +16,7 @@ export type LinhaPec = {
   pecCod: string
   pecNome: string
   crCod: string
+  crs?: string[]
   gerente: string | null
   cliente: string | null
   status: StatusLinha
@@ -46,7 +47,7 @@ export function filtrarPecs(pecs: LinhaPec[], busca: string): LinhaPec[] {
   const q = semAcento(busca.trim())
   if (!q) return pecs
   return pecs.filter((p) =>
-    semAcento([p.pecCod, p.pecNome, p.crCod, p.gerente ?? "", p.cliente ?? ""].join(" ")).includes(q),
+    semAcento([p.pecCod, p.pecNome, ...(p.crs ?? [p.crCod]), p.gerente ?? "", p.cliente ?? ""].join(" ")).includes(q),
   )
 }
 

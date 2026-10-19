@@ -30,6 +30,7 @@ type UsuarioAdmin = {
   isActive: boolean
   hasAccess: boolean
   isAdmin: boolean
+  isAnalista: boolean
   visibleScreens: string[]
   ehSeguranca: boolean
   classificacao: string
@@ -166,6 +167,7 @@ function Conteudo({ meuEmail }: Props) {
                     <th className="px-3 py-2 font-semibold">CPF</th>
                     <th className="px-3 py-2 font-semibold">Acesso</th>
                     <th className="px-3 py-2 font-semibold">Admin</th>
+                    <th className="px-3 py-2 font-semibold">Analista</th>
                     <th className="px-3 py-2 font-semibold">Segurança</th>
                     <th className="px-3 py-2 font-semibold">Telas</th>
                     <th className="px-3 py-2" />
@@ -187,6 +189,7 @@ function Conteudo({ meuEmail }: Props) {
                         <td className="px-3 py-2.5 text-muted-foreground">{u.cpf ?? "—"}</td>
                         <td className="px-3 py-2.5"><Selo on={u.hasAccess} rotuloOn="Com acesso" rotuloOff="Sem acesso" /></td>
                         <td className="px-3 py-2.5"><Selo on={u.isAdmin} rotuloOn="Admin" rotuloOff="—" /></td>
+                        <td className="px-3 py-2.5"><Selo on={u.isAnalista} rotuloOn="Analista" rotuloOff="—" /></td>
                         <td className="px-3 py-2.5"><Selo on={u.ehSeguranca} rotuloOn="Segurança" rotuloOff="—" /></td>
                         <td className="px-3 py-2.5 text-muted-foreground">
                           {u.isAdmin || u.ehSeguranca ? "todas" : u.visibleScreens.length}
@@ -204,7 +207,7 @@ function Conteudo({ meuEmail }: Props) {
                       </tr>
                       {editando === u.email && (
                         <tr>
-                          <td colSpan={8} className="px-3 pb-4">
+                          <td colSpan={9} className="px-3 pb-4">
                             <EditorAcesso
                               usuario={u}
                               ehEuMesmo={!!meuEmail && meuEmail.toLowerCase() === u.email.toLowerCase()}
@@ -268,6 +271,7 @@ function FormularioCriar({
   const [cpf, setCpf] = React.useState("")
   const [senha, setSenha] = React.useState("")
   const [isAdmin, setIsAdmin] = React.useState(false)
+  const [isAnalista, setIsAnalista] = React.useState(false)
   const [seguranca, setSeguranca] = React.useState(false)
   const [telas, setTelas] = React.useState<string[]>([])
   const [crs, setCrs] = React.useState<string[]>([])
@@ -294,6 +298,7 @@ function FormularioCriar({
           cpf,
           password: senha,
           isAdmin,
+          isAnalista,
           seguranca,
           hasAccess: true,
           visibleScreens: telas,
@@ -363,6 +368,10 @@ function FormularioCriar({
             É administrador (vê tudo e gerencia usuários)
           </label>
           <label className="flex items-center gap-2 text-sm text-navy">
+            <Checkbox checked={isAnalista} onCheckedChange={(v) => setIsAnalista(!!v)} />
+            É Analista
+          </label>
+          <label className="flex items-center gap-2 text-sm text-navy">
             <Checkbox checked={seguranca} onCheckedChange={(v) => setSeguranca(!!v)} />
             É Segurança (configura o EPI)
           </label>
@@ -390,6 +399,7 @@ function EditorAcesso({
   const { sucesso, erro } = useToast()
   const [hasAccess, setHasAccess] = React.useState(usuario.hasAccess)
   const [isAdmin, setIsAdmin] = React.useState(usuario.isAdmin)
+  const [isAnalista, setIsAnalista] = React.useState(usuario.isAnalista)
   const [seguranca, setSeguranca] = React.useState(usuario.ehSeguranca)
   const [telas, setTelas] = React.useState<string[]>(usuario.visibleScreens)
   const [crs, setCrs] = React.useState<string[]>(usuario.crs)
@@ -414,6 +424,7 @@ function EditorAcesso({
           name: usuario.name,
           hasAccess,
           isAdmin,
+          isAnalista,
           seguranca,
           visibleScreens: telas,
           classificacao,
@@ -448,6 +459,10 @@ function EditorAcesso({
             onCheckedChange={(v) => setIsAdmin(!!v)}
           />
           Administrador
+        </label>
+        <label className="flex items-center gap-2 text-sm text-navy">
+          <Checkbox checked={isAnalista} onCheckedChange={(v) => setIsAnalista(!!v)} />
+          Analista
         </label>
         <label
           className={cn("flex items-center gap-2 text-sm text-navy", !usuario.authUserId && "opacity-50")}

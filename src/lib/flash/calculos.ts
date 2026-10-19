@@ -17,6 +17,7 @@ export type TipoItem = "PESSOAS" | "UNITARIO" | "HORA_EXTRA" | "DESCONTO" | "FIX
 export type Item = {
   id: number; descricao: string; tipo: TipoItem; natureza: Natureza; crCod: string
   valorUnitario: number; qtdPadrao: number; agrupador: string | null; ordem: number; ativo: boolean
+  parametros?: import("@/lib/projecoes/abas").ParametrosItem
 }
 export type LinhaSemana = { itemId: number; valorUnitario: number; quantidade: number }
 export type Alteracao = { itemId: number; de: number; para: number }

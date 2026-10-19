@@ -1,3 +1,4 @@
+import { escopoRegionalDaRequisicao } from "@/lib/projecoes/regional"
 import { NextResponse } from "next/server"
 import { z } from "zod"
 
@@ -17,7 +18,7 @@ export async function PUT(req: Request, ctx: Ctx) {
   const g = await guardaFlash(); if (!g.ok) return g.response
   const id = idDe(ctx); if (!id.success) return erroZod(id.error)
   const b = itemSchema.safeParse(await req.json().catch(() => null)); if (!b.success) return erroZod(b.error)
-  try { return NextResponse.json(await salvarItem(g.escopo, ctx.params.pec, b.data, id.data)) } catch (e) { return responderErro(e) }
+  try { return NextResponse.json(await salvarItem(await escopoRegionalDaRequisicao(req, g.escopo), ctx.params.pec, b.data, id.data)) } catch (e) { return responderErro(e) }
 }
 
 // PATCH — ativa/desativa o item.
@@ -25,5 +26,5 @@ export async function PATCH(req: Request, ctx: Ctx) {
   const g = await guardaFlash(); if (!g.ok) return g.response
   const id = idDe(ctx); if (!id.success) return erroZod(id.error)
   const b = z.object({ ativo: z.boolean() }).safeParse(await req.json().catch(() => null)); if (!b.success) return erroZod(b.error)
-  try { await definirAtivo(g.escopo, ctx.params.pec, id.data, b.data.ativo); return NextResponse.json({ ok: true }) } catch (e) { return responderErro(e) }
+  try { await definirAtivo(await escopoRegionalDaRequisicao(req, g.escopo), ctx.params.pec, id.data, b.data.ativo); return NextResponse.json({ ok: true }) } catch (e) { return responderErro(e) }
 }

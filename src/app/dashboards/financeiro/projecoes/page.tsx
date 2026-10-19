@@ -1,3 +1,4 @@
+import { escopoRegionalProjecoes } from "@/lib/projecoes/regional"
 import type { Metadata } from "next"
 import Link from "next/link"
 import { AlertTriangle, Search } from "lucide-react"
@@ -19,7 +20,7 @@ export const dynamic = "force-dynamic"
 
 export default async function ProjecoesPage({ searchParams }: { searchParams: Record<string, string | string[] | undefined> }) {
   await assertTelaVisivel(TELA_PROJECOES)
-  const escopo = await escopoDaPagina()
+  const escopo = await escopoRegionalProjecoes(await escopoDaPagina())
   const lido = periodoSchema.safeParse({ mes: searchParams.mes, semana: searchParams.semana })
   const periodo: Periodo = lido.success ? lido.data : semanaDoMes(new Date())
   const dim = lerDim(searchParams.agrupar)
@@ -51,7 +52,7 @@ export default async function ProjecoesPage({ searchParams }: { searchParams: Re
   return (
     <div className="space-y-6">
       <section className="reveal">
-        <span className="eyebrow">Financeiro</span>
+        <span className="eyebrow">Financeiro · Regional Lucas</span>
         <div className="mt-3 flex items-center gap-2.5">
           <h1 className="font-display text-3xl font-semibold tracking-tight text-navy">Projeções</h1>
           <ProjecoesVisaoInfo />
@@ -121,11 +122,9 @@ export default async function ProjecoesPage({ searchParams }: { searchParams: Re
 
       {!erro && pecs.length === 0 && (
         <div className="glass rounded-3xl p-8 text-center">
-          <p className="font-display text-lg font-semibold text-navy">Nenhum contrato parametrizado ainda</p>
-          <p className="mt-1 text-sm text-muted-foreground">Habilite um PEC no Flash Report para começar a projetar.</p>
-          <Link href="/dashboards/financeiro/flash-report" className="mt-4 inline-flex h-10 items-center rounded-xl bg-inhaus-grad px-5 text-sm font-semibold text-white shadow-glow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal focus-visible:ring-offset-2">
-            Ir para o Flash Report
-          </Link>
+          <p className="font-display text-lg font-semibold text-navy">Nenhum PEC disponível no seu acesso</p>
+          <p className="mt-1 text-sm text-muted-foreground">Os PECs são carregados da tabela de CRs, conforme os seus vínculos de acesso.</p>
+
         </div>
       )}
 

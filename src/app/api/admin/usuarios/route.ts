@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { z } from "zod"
 
 import { guardAdmin } from "@/lib/admin-guard"
+import { invalidarAutorizacaoLocal } from "@/lib/auth-session"
 import { GlobalAuthError, normalizeEmail } from "@/lib/global-auth"
 import {
   listarUsuariosAdmin,
@@ -29,6 +30,7 @@ const criarSchema = z.object({
   cpf: cpfSchema,
   password: z.string().min(8, "Senha deve ter ao menos 8 caracteres"),
   isAdmin: z.boolean().default(false),
+  isAnalista: z.boolean().default(false),
   hasAccess: z.boolean().default(true),
   visibleScreens: telasSchema,
   seguranca: z.boolean().default(false),
@@ -44,6 +46,7 @@ const acessoSchema = z.object({
   name: z.string().nullable().optional(),
   hasAccess: z.boolean(),
   isAdmin: z.boolean(),
+  isAnalista: z.boolean().optional(),
   visibleScreens: telasSchema,
   seguranca: z.boolean().optional(),
   classificacao: z.enum(["INTERNO", "CLIENTE"]).default("INTERNO"),
@@ -121,6 +124,7 @@ export async function POST(request: Request) {
 
   try {
     const usuario = await criarUsuarioAdmin(parsed.data)
+    invalidarAutorizacaoLocal(parsed.data.email)
     return NextResponse.json({ usuario })
   } catch (e) {
     return mapaErro(e)
@@ -159,6 +163,7 @@ export async function PATCH(request: Request) {
 
   try {
     const usuario = await atualizarAcessoLocal(parsed.data)
+    invalidarAutorizacaoLocal(parsed.data.email)
     return NextResponse.json({ usuario })
   } catch (e) {
     return mapaErro(e)

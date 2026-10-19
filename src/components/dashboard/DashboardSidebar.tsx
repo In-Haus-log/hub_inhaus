@@ -16,13 +16,16 @@ import {
   ChevronRight,
   ChevronLeft,
   Layers,
+  Building2,
   type LucideIcon,
 } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { InhausLogo } from "@/components/brand/InhausLogo"
-import { DOMINIOS, TELA_HOME, clientesVisiveis, TODAS_AS_TELAS } from "@/lib/domains"
+import { DOMINIOS_NAVEGACAO as DOMINIOS, DOMINIOS_OCULTOS, TELA_HOME, clientesVisiveis, telasVisiveis } from "@/lib/domains"
 import { marcaDoCliente } from "@/lib/clientes-branding"
+import { chaveClienteBi, rotaClienteBi, rotaRelatorioBi, type ClienteBi } from "@/lib/powerbi-permissoes"
+import { iconeDoBi } from "@/components/powerbi/icones"
 
 type NavItem = {
   href: string
@@ -109,6 +112,8 @@ const GRUPO_ADMIN: NavGroup = {
 export function DashboardSidebar({
   onNavigate,
   isAdmin = false,
+  isAnalista = false,
+  clientesBi = [],
   epiConfig = false,
   epiValida = false,
   nome = null,
@@ -120,6 +125,8 @@ export function DashboardSidebar({
 }: {
   onNavigate?: () => void
   isAdmin?: boolean
+  isAnalista?: boolean
+  clientesBi?: ClienteBi[]
   epiConfig?: boolean
   epiValida?: boolean
   nome?: string | null
@@ -134,13 +141,9 @@ export function DashboardSidebar({
   // Portal do cliente: sidebar plana, só com as telas concedidas àquele cliente +
   // logo da marca — nada de In-Haus, Clientes, Administração ou Visão Geral.
   const ehCliente = classificacao === "CLIENTE"
-  const permitidasCliente = visibleScreens ? new Set(visibleScreens) : null
-  const telasCliente = TODAS_AS_TELAS.filter(
-    (t) => !t.emBreve && t.clienteKey && (permitidasCliente === null || permitidasCliente.has(t.key)),
-  )
   // "Checklists" (porta de preenchimento do líder) mora DENTRO do In-Haus, junto do
   // EPI — não na Visão Geral. Fica no topo do grupo EPI.
-  const grupoEpiBase = grupoEpi(epiConfig, epiValida)
+  const grupoEpiBase = DOMINIOS_OCULTOS.has("epi") ? null : grupoEpi(epiConfig, epiValida)
   const grupoEpiAtual: NavGroup | null =
     grupoEpiBase && epiValida
       ? {
@@ -156,20 +159,37 @@ export function DashboardSidebar({
   // admin ou para quem tem a chave da Home. Sem ela (ex.: usuário só com telas de
   // cliente), a Visão Geral some da sidebar.
   const mostraGeral =
-    isAdmin || visibleScreens === null || visibleScreens.includes(TELA_HOME.key)
+    false
   // Estrutura do raiz: Visão Geral (grupoGeral) + pasta In-Haus + pasta(s) Clientes +
   // Administração. Tudo que é INTERNO (domínios + EPI) vai para dentro do In-Haus.
   const gruposInternos: NavGroup[] = [
-    ...gruposDominio(visibleScreens),
+    ...gruposDominio(isAnalista && visibleScreens ? Array.from(new Set([...visibleScreens, "powerbi"])) : visibleScreens),
     ...(grupoEpiAtual ? [grupoEpiAtual] : []),
   ]
-  const grupoAdmin: NavGroup | null = isAdmin ? GRUPO_ADMIN : null
+  const grupoAdmin: NavGroup | null = isAdmin || isAnalista ? {
+    ...GRUPO_ADMIN,
+    items: [
+      ...(isAdmin ? GRUPO_ADMIN.items : []),
+      { href: "/dashboards/administracao/clientes", label: "Clientes", icon: Building2 },
+      { href: "/dashboards/administracao/relatorios", label: "Relatórios", icon: LayoutDashboard },
+    ],
+  } : null
 
   // Domínios com subnível de clientes que têm ao menos um cliente visível ao usuário.
-  const dominiosClientes = DOMINIOS.map((dominio) => ({
-    dominio,
-    clientes: clientesVisiveis(dominio, visibleScreens),
-  })).filter((d) => d.clientes.length > 0)
+  const dominiosClientes = DOMINIOS.map((dominio) => {
+    const clientes = clientesVisiveis(dominio, visibleScreens).map(c => ({ ...c, icone: Building2, telas: [...c.telas] }))
+    if (dominio.key === "clientes") for (const c of clientesBi) {
+      const telas = (c.relatorios ?? []).map(p => ({ key: `${chaveClienteBi(c.id)}:relatorio:${p.id}`, label: p.titulo, href: rotaRelatorioBi(c.id,p.id), icone: iconeDoBi(p.icone) }))
+      const existente = clientes.find(item => item.key === c.slug)
+      if (existente) existente.telas.push(...telas)
+      else clientes.push({ key: c.slug, label: c.nome, icone: Building2, telas: telas.length ? telas : [{ key: chaveClienteBi(c.id), label: "Projetos", href: rotaClienteBi(c.id), icone: LayoutDashboard }] })
+    }
+    return { dominio, clientes }
+  }).filter(d => d.clientes.length > 0 || (d.dominio.key === "clientes" && (isAdmin || isAnalista)))
+  const telasCliente = [
+    ...dominiosClientes.flatMap(({ clientes }) => clientes.flatMap(c => c.telas.map(t => ({ ...t, clienteKey: c.key, clienteLabel: c.label })))),
+    ...telasVisiveis({ isAdmin, visibleScreens: visibleScreens ?? [] }).filter(t => !t.clienteKey && t.key !== "home"),
+  ]
 
   // Navegação em DRILL-DOWN na área Clientes: a sidebar TROCA de nível em vez de
   // aninhar — raiz → lista de clientes → telas do cliente — mantendo o menu limpo.
@@ -194,7 +214,7 @@ export function DashboardSidebar({
       setVista({ nivel: "inhaus" })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pathname])
+  }, [pathname, clientesBi])
 
   const entradaCliente = (dominioKey: string) =>
     dominiosClientes.find((d) => d.dominio.key === dominioKey) ?? null
@@ -257,6 +277,7 @@ export function DashboardSidebar({
               })}
             </ul>
           )}
+          {grupoAdmin && renderGrupo(grupoAdmin)}
         </nav>
 
         <div className="mt-auto border-t border-navy/10 pt-4">
@@ -286,7 +307,7 @@ export function DashboardSidebar({
     )
   }
 
-  const renderGrupo = (group: NavGroup) => (
+  function renderGrupo(group: NavGroup) { return (
     <div key={group.title}>
       <p className="flex items-center gap-1.5 px-3 pb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">
         {group.icon && <group.icon className="h-3 w-3" />}
@@ -329,7 +350,7 @@ export function DashboardSidebar({
         })}
       </ul>
     </div>
-  )
+  ) }
 
   return (
     <div className="flex h-full flex-col gap-6 px-4 py-6">
@@ -540,3 +561,4 @@ export function DashboardSidebar({
     </div>
   )
 }
+

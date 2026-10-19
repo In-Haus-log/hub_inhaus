@@ -12,7 +12,9 @@ export function ProjecoesVisaoInfo() {
           <li><strong>% Margem</strong> = MC ÷ ROL.</li>
           <li>Contrato <strong>sem lançamento</strong> na semana aparece com traço (—) e <strong>não entra</strong> nos totais.</li>
           <li><strong>Agrupar por</strong> junta os contratos por CR, gerente ou cliente e soma os números de cada grupo.</li>
-          <li>Clique num contrato para <strong>parametrizar</strong>: receitas, custos e o CR de cada item.</li>
+          <li>A carteira exibida é a do <strong>Gerente Regional Lucas Rodrigues da Silva</strong>, intersectada com os CRs autorizados do usuário.</li>
+          <li>Os <strong>PECs vêm da tabela de CRs</strong>, mesmo sem parametrização ou lançamento. Cada PEC aparece uma vez.</li>
+          <li>Clique num PEC para ver seus <strong>CRs vinculados</strong> e parametrizar os itens. Você só pode selecionar CRs desse PEC dentro da sua carteira.</li>
         </ul>
         <p className="rounded-xl bg-navy-mist p-3">
           <strong>Exemplo:</strong> ROL R$ 900.000 e custos R$ 120.000 → <strong>MC R$ 780.000</strong>. Margem = 780.000 ÷ 900.000 = <strong>86,7%</strong>.

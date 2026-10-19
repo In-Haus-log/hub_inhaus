@@ -1,3 +1,4 @@
+import { escopoRegionalDaRequisicao } from "@/lib/projecoes/regional"
 import { NextResponse } from "next/server"
 
 import { erroZod, responderErro } from "@/app/api/flash/_resposta"
@@ -10,14 +11,14 @@ export const dynamic = "force-dynamic"
 type Ctx = { params: { pec: string } }
 
 // GET — itens cobrados do PEC (parametrização).
-export async function GET(_: Request, ctx: Ctx) {
+export async function GET(req: Request, ctx: Ctx) {
   const g = await guardaFlash(); if (!g.ok) return g.response
-  try { return NextResponse.json({ itens: await listarItens(g.escopo, ctx.params.pec) }) } catch (e) { return responderErro(e) }
+  try { return NextResponse.json({ itens: await listarItens(await escopoRegionalDaRequisicao(req, g.escopo), ctx.params.pec) }) } catch (e) { return responderErro(e) }
 }
 
 // POST — cria um item.
 export async function POST(req: Request, ctx: Ctx) {
   const g = await guardaFlash(); if (!g.ok) return g.response
   const b = itemSchema.safeParse(await req.json().catch(() => null)); if (!b.success) return erroZod(b.error)
-  try { return NextResponse.json(await salvarItem(g.escopo, ctx.params.pec, b.data)) } catch (e) { return responderErro(e) }
+  try { return NextResponse.json(await salvarItem(await escopoRegionalDaRequisicao(req, g.escopo), ctx.params.pec, b.data)) } catch (e) { return responderErro(e) }
 }

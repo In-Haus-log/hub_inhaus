@@ -43,6 +43,7 @@ export type Authorization = {
   email: string
   nome: string | null
   isAdmin: boolean
+  isAnalista?: boolean
   hasAccess: boolean
   // Classificação local (INTERNO | CLIENTE). Não restringe permissões; alimenta o
   // escopo de dados (CLIENTE nunca vê tudo).
@@ -102,6 +103,7 @@ async function resolveAuthorization(user: GlobalAuthUser): Promise<Authorization
       email: registro.email,
       nome: registro.name ?? user.name ?? null,
       isAdmin: registro.isAdmin,
+      isAnalista: registro.isAnalista,
       hasAccess: registro.hasAccess,
       classificacao: registro.classificacao ?? "INTERNO",
       // Admin enxerga TODAS as telas, sem restrição; demais usam o que foi concedido.
@@ -167,6 +169,11 @@ export function getAccessTokenFromCookies() {
 type SessaoCache = { sessao: Sessao; expiraEm: number }
 const SESSION_TTL_MS = 60_000
 const sessaoCache = new Map<string, SessaoCache>()
+export function invalidarAutorizacaoLocal(email: string) {
+  for (const [token,entrada] of sessaoCache) {
+    if (entrada.sessao.user.email.toLowerCase() === email.toLowerCase()) sessaoCache.delete(token)
+  }
+}
 
 function lerCache(accessToken: string): Sessao | null {
   const hit = sessaoCache.get(accessToken)

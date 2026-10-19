@@ -20,6 +20,7 @@ model AuthUser {
   email          String    @unique
   name           String?
   isAdmin        Boolean   @default(false) @map("is_admin")
+  isAnalista     Boolean   @default(false) @map("is_analista")
   // Classificação LOCAL do hub (nunca vai ao global_auth). Não restringe permissões:
   // 'INTERNO' (equipe In-Haus) | 'CLIENTE' (externo, sempre travado por escopo).
   classificacao  String    @default("INTERNO")

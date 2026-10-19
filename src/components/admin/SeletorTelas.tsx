@@ -52,7 +52,50 @@ function montarGrupos(): GrupoTela[] {
 
 const GRUPOS = montarGrupos()
 
+type ClientePowerBi = { id: number | string; nome: string; slug: string }
+type RespostaClientes = { clientes: ClientePowerBi[] }
+
 export function SeletorTelas({ value, onChange }: Props) {
+  const [clientes, setClientes] = React.useState<ClientePowerBi[]>([])
+  const [carregandoClientes, setCarregandoClientes] = React.useState(true)
+  const [erroClientes, setErroClientes] = React.useState(false)
+
+  const carregarClientes = React.useCallback(async () => {
+    setCarregandoClientes(true)
+    setErroClientes(false)
+    try {
+      const response = await fetch("/api/powerbi/clientes", { cache: "no-store" })
+      if (!response.ok) throw new Error("Falha ao carregar clientes")
+      const data = (await response.json()) as RespostaClientes
+      if (!Array.isArray(data.clientes)) throw new Error("Resposta inválida")
+      setClientes(data.clientes.filter((cliente) => cliente && cliente.id != null && typeof cliente.nome === "string"))
+    } catch {
+      setErroClientes(true)
+    } finally {
+      setCarregandoClientes(false)
+    }
+  }, [])
+
+  React.useEffect(() => {
+    void carregarClientes()
+  }, [carregarClientes])
+
+  const gruposOriginais = [
+    ...GRUPOS,
+    ...clientes.map((cliente): GrupoTela => ({
+      titulo: `Cliente: ${cliente.nome}`,
+      ehCliente: true,
+      telas: [{ key: `cliente-bi:${cliente.id}`, label: "Relatórios Power BI" }],
+    })),
+  ]
+  // Sistemas e BIs do mesmo cliente compartilham um único grupo de permissões.
+  const grupos = gruposOriginais.reduce<GrupoTela[]>((resultado, grupo) => {
+    const existente = resultado.find(item => item.titulo === grupo.titulo && item.ehCliente === grupo.ehCliente)
+    if (existente) existente.telas.push(...grupo.telas)
+    else resultado.push({ ...grupo, telas: [...grupo.telas] })
+    return resultado
+  }, [])
+
   function alternar(key: string) {
     if (value.includes(key)) onChange(value.filter((k) => k !== key))
     else onChange([...value, key])
@@ -70,7 +113,18 @@ export function SeletorTelas({ value, onChange }: Props) {
 
   return (
     <div className="max-h-72 space-y-4 overflow-y-auto rounded-xl border border-input p-3">
-      {GRUPOS.map((grupo) => {
+      {erroClientes && (
+        <div role="alert" className="flex items-center justify-between gap-2 text-xs text-destructive">
+          <span>Não foi possível carregar os clientes.</span>
+          <button type="button" onClick={() => void carregarClientes()} className="shrink-0 font-medium underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            Tentar novamente
+          </button>
+        </div>
+      )}
+      {!erroClientes && !carregandoClientes && clientes.length === 0 && (
+        <p className="text-xs text-muted-foreground">Nenhum cliente disponível para relatórios Power BI.</p>
+      )}
+      {grupos.map((grupo) => {
         const chaves = grupo.telas.map((t) => t.key)
         const todasSelecionadas = chaves.every((k) => value.includes(k))
         return (

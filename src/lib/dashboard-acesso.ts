@@ -7,6 +7,9 @@ import { CHAVES_DE_TELA } from "@/lib/domains"
 import { HEADER_PATHNAME } from "@/lib/http-headers"
 import { resolverAcessoEpi, podeConfigurar } from "@/lib/epi/papeis"
 import { escopoDoUsuario, podeVerValidacoes } from "@/lib/epi/escopo"
+import { listarClientesBi } from "@/lib/powerbi-acesso"
+import { idsClientesBi, type ClienteBi } from "@/lib/powerbi-permissoes"
+import { preenchedorExclusivo } from "@/lib/dashboard-perfil"
 
 /**
  * Papéis do usuário no shell do dashboard, resolvidos UMA vez e reaproveitados
@@ -22,6 +25,8 @@ export type PapeisDashboard = {
   nome: string | null
   email: string | null
   isAdmin: boolean
+  isAnalista?: boolean
+  clientesBi?: ClienteBi[]
   epiConfig: boolean
   epiValida: boolean
   soPreenche: boolean
@@ -54,6 +59,7 @@ export async function resolverPapeisDashboard(next = "/dashboards"): Promise<Pap
       soPreenche: false,
       visibleScreens: CHAVES_DE_TELA,
       classificacao: "INTERNO",
+      clientesBi: await listarClientesBi({ isAdmin: true, ids: [] }).catch(() => []),
     }
   }
 
@@ -79,9 +85,11 @@ export async function resolverPapeisDashboard(next = "/dashboards"): Promise<Pap
     nome: sessao.authorization.nome,
     email: sessao.user.email,
     isAdmin,
+    isAnalista: sessao.authorization.isAnalista ?? false,
+    clientesBi: await listarClientesBi({ isAdmin, ids: idsClientesBi(sessao.authorization.visibleScreens) }).catch(() => []),
     epiConfig,
     epiValida,
-    soPreenche: epiValida && !epiConfig && !isAdmin,
+    soPreenche: preenchedorExclusivo({ epiValida, epiConfig, isAdmin, isAnalista: sessao.authorization.isAnalista, visibleScreens: sessao.authorization.visibleScreens }),
     visibleScreens: sessao.authorization.visibleScreens,
     classificacao: sessao.authorization.classificacao ?? "INTERNO",
   }

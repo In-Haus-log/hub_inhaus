@@ -114,6 +114,19 @@ export function RegrasInfo() {
                   </p>
                 </section>
 
+                <Secao titulo="Desligamentos e recontratações">
+                  <p className="text-muted-foreground">
+                    A pessoa aparece nos indicadores até a sua <b className="text-foreground">data
+                    de desligamento</b>, inclusive. A partir do dia seguinte, seus registros deixam
+                    de compor o quadro e as taxas. Quando não há data de desligamento, o vínculo
+                    continua aberto.
+                  </p>
+                  <p className="mt-3 text-muted-foreground">
+                    O vínculo é conferido pela <b className="text-foreground">matrícula e pela
+                    unidade</b>, respeitando as datas de admissão e desligamento registradas.
+                  </p>
+                </Secao>
+
                 <Secao titulo="Presença, falta e folga">
                   <p className="text-muted-foreground">Classificação de cada dia:</p>
                   <div className="mt-3 grid gap-2.5 sm:grid-cols-2">

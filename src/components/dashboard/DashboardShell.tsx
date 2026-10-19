@@ -7,6 +7,7 @@ import { Menu, X, Search } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar"
 import { InhausLogo } from "@/components/brand/InhausLogo"
+import type { ClienteBi } from "@/lib/powerbi-permissoes"
 
 type DashboardShellProps = {
   children: ReactNode
@@ -15,6 +16,8 @@ type DashboardShellProps = {
   nome: string | null
   email: string | null
   isAdmin: boolean
+  isAnalista?: boolean
+  clientesBi?: ClienteBi[]
   /** Pode configurar EPI (admin/Segurança) — mostra Configurar/Checklists/Líderes. */
   epiConfig?: boolean
   /** Pode validar EPI (admin/Segurança/líder) — mostra Validações. */
@@ -27,7 +30,7 @@ type DashboardShellProps = {
   classificacao?: string
 }
 
-export function DashboardShell({ children, nome, email, isAdmin, epiConfig = false, epiValida = false, soPreenche = false, visibleScreens = null, classificacao = "INTERNO" }: DashboardShellProps) {
+export function DashboardShell({ children, nome, email, isAdmin, isAnalista = false, clientesBi = [], epiConfig = false, epiValida = false, soPreenche = false, visibleScreens = null, classificacao = "INTERNO" }: DashboardShellProps) {
   const router = useRouter()
   const [drawer, setDrawer] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
@@ -56,6 +59,8 @@ export function DashboardShell({ children, nome, email, isAdmin, epiConfig = fal
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-72 border-r border-navy/10 bg-white/80 backdrop-blur-xl lg:block">
         <DashboardSidebar
           isAdmin={isAdmin}
+          isAnalista={isAnalista}
+          clientesBi={clientesBi}
           epiConfig={epiConfig}
           epiValida={epiValida}
           nome={nome}
@@ -90,6 +95,8 @@ export function DashboardShell({ children, nome, email, isAdmin, epiConfig = fal
         >
           <DashboardSidebar
             isAdmin={isAdmin}
+            isAnalista={isAnalista}
+            clientesBi={clientesBi}
             epiConfig={epiConfig}
             epiValida={epiValida}
             nome={nome}

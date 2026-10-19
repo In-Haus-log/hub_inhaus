@@ -32,6 +32,7 @@ export type UsuarioAdmin = {
   // --- acesso LOCAL deste projeto (autorização) ---
   hasAccess: boolean
   isAdmin: boolean
+  isAnalista: boolean
   visibleScreens: string[]
   /** Papel Segurança (SST central) — configura o módulo de EPI. */
   ehSeguranca: boolean
@@ -89,6 +90,7 @@ export async function listarUsuariosAdmin(accessToken: string): Promise<UsuarioA
         isActive: g.isActive,
         hasAccess: local?.hasAccess ?? false,
         isAdmin: local?.isAdmin ?? false,
+        isAnalista: local?.isAnalista ?? false,
         visibleScreens: local?.visibleScreens ?? [],
         ehSeguranca: segurancaIds.has(g.id),
         classificacao: local?.classificacao ?? "INTERNO",
@@ -110,6 +112,7 @@ export async function criarUsuarioAdmin(input: {
   cpf: string
   password: string
   isAdmin: boolean
+  isAnalista: boolean
   hasAccess: boolean
   visibleScreens: string[]
   seguranca: boolean
@@ -145,6 +148,7 @@ export async function criarUsuarioAdmin(input: {
       authUserId: identidade?.id ?? undefined,
       name: input.name,
       isAdmin: input.isAdmin,
+      isAnalista: input.isAnalista,
       hasAccess: input.hasAccess,
       visibleScreens: telas,
     },
@@ -153,6 +157,7 @@ export async function criarUsuarioAdmin(input: {
       authUserId: identidade?.id ?? null,
       name: input.name,
       isAdmin: input.isAdmin,
+      isAnalista: input.isAnalista,
       hasAccess: input.hasAccess,
       visibleScreens: telas,
     },
@@ -180,6 +185,7 @@ export async function criarUsuarioAdmin(input: {
     isActive: identidade?.isActive ?? true,
     hasAccess: local.hasAccess,
     isAdmin: local.isAdmin,
+    isAnalista: local.isAnalista,
     visibleScreens: local.visibleScreens,
     ehSeguranca: ehSeg,
     classificacao: input.classificacao,
@@ -199,6 +205,7 @@ export async function atualizarAcessoLocal(input: {
   name?: string | null
   hasAccess: boolean
   isAdmin: boolean
+  isAnalista?: boolean
   visibleScreens: string[]
   seguranca?: boolean
   classificacao?: string
@@ -213,6 +220,7 @@ export async function atualizarAcessoLocal(input: {
     update: {
       hasAccess: input.hasAccess,
       isAdmin: input.isAdmin,
+      isAnalista: input.isAnalista ?? undefined,
       visibleScreens: telas,
       authUserId: input.authUserId ?? undefined,
       name: input.name ?? undefined,
@@ -223,6 +231,7 @@ export async function atualizarAcessoLocal(input: {
       name: input.name ?? null,
       hasAccess: input.hasAccess,
       isAdmin: input.isAdmin,
+      isAnalista: input.isAnalista ?? false,
       visibleScreens: telas,
     },
   })
@@ -254,6 +263,7 @@ export async function atualizarAcessoLocal(input: {
     isActive: true,
     hasAccess: local.hasAccess,
     isAdmin: local.isAdmin,
+    isAnalista: local.isAnalista,
     visibleScreens: local.visibleScreens,
     ehSeguranca: ehSeg,
     classificacao: classe,
